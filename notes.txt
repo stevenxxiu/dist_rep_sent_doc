@@ -1,0 +1,2 @@
+
+Since we use a gpu, it might be possible to use softmax itself instead of hierarchical softmax, since it is likely quite fast too.
