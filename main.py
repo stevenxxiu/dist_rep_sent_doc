@@ -1,4 +1,5 @@
 import heapq
+from collections import Counter
 
 import numpy as np
 import theano.tensor as T
@@ -6,28 +7,42 @@ import theano.tensor as T
 from data import preprocess_data
 
 
+class HuffmanNode:
+    def __init__(self, id_, freq, left=None, right=None):
+        self.id_ = id_
+        self.freq = freq
+        self.left = left
+        self.right = right
+
+    def __eq__(self, other):
+        return self.freq == other.freq and self.id_ == other.id_ and \
+               self.left == other.left and self.right == other.right
+
+    def __lt__(self, other):
+        return self.freq < other.freq
+
+
 def build_huffman(word_to_freq):
-    '''
-    :return: A dictionary mapping each node or word to it's children.
-    '''
-    node_to_children = {}
-    queue = [(freq, word) for word, freq in word_to_freq.items()]
+    queue = [HuffmanNode(word, freq) for word, freq in word_to_freq.items()]
     heapq.heapify(queue)
     while len(queue) > 1:
         children = [heapq.heappop(queue), heapq.heappop(queue)]
-        n = len(queue)
-        node_to_children[n] = [children[0][1], children[1][1]]
-        heapq.heappush(queue, (children[0][0] + children[1][0], n))
-    return node_to_children
+        heapq.heappush(queue, HuffmanNode(len(queue), children[0].freq + children[1].freq, *children))
+    return queue[0]
 
 
 def tree_to_paths(tree):
-    node_to_path = {0: []}
-    for node, children in tree.items():
-        path = node_to_path.pop(node)
-        for i, child in enumerate(children):
-            node_to_path[child] = path + [(node, -1 if i == 0 else 1)]
-    return node_to_path
+    '''
+    :return: A dictionary mapping words in the tree to it's path.
+    '''
+    if tree.left:
+        return {
+            word: [(tree.id_, -1 if i == 0 else 1)] + path
+            for i, child in enumerate([tree.left, tree.right])
+            for word, path in tree_to_paths(child).items()
+        }
+    else:
+        return {tree.id_: []}
 
 
 def tree_to_mat(tree, word_to_index):
@@ -75,6 +90,13 @@ def run_model():
 
 def main():
     train, val, test = preprocess_data('../data/stanford_sentiment_treebank/class_5')
+    word_to_freq = Counter(word for docs in (train, val, test) for doc in docs for word in doc[1])
+    vocab_min_freq = 0
+    word_to_index = {'<unk>': 0}
+    for word, count in word_to_freq.items():
+        if count >= vocab_min_freq:
+            word_to_index[word] = len(word_to_index)
+    mask_mat, path_mat, child_mat = tree_to_mat(build_huffman(word_to_freq), word_to_index)
 
 if __name__ == '__main__':
     main()

@@ -1,21 +1,31 @@
 import unittest
 
+import theano
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 from scipy.special import expit
 
 from main import *
+
+tree = HuffmanNode(
+    0, 39,
+    HuffmanNode('a', 15),
+    HuffmanNode(
+        1, 24,
+        HuffmanNode(3, 11, HuffmanNode('e', 5), HuffmanNode('c', 6)),
+        HuffmanNode(2, 13, HuffmanNode('d', 6), HuffmanNode('b', 7))
+        )
+    )
 
 
 class TestHuffman(unittest.TestCase):
     def test_build_huffman(self):
         # wikipedia's example, equivalent huffman tree
         self.assertEqual(
-            build_huffman({'a': 15, 'b': 7, 'c': 6, 'd': 6, 'e': 5}),
-            {0: ['a', 1], 1: [3, 2], 3: ['e', 'c'], 2: ['d', 'b']}
+            build_huffman({'a': 15, 'b': 7, 'c': 6, 'd': 6, 'e': 5}), tree
         )
 
     def test_tree_to_paths(self):
-        self.assertEqual(tree_to_paths({0: ['a', 1], 1: [3, 2], 3: ['e', 'c'], 2: ['d', 'b']}), {
+        self.assertEqual(tree_to_paths(tree), {
             'a': [(0, -1)],
             'b': [(0, 1), (1, 1), (2, 1)],
             'c': [(0, 1), (1, -1), (3, 1)],
@@ -24,10 +34,7 @@ class TestHuffman(unittest.TestCase):
         })
 
     def test_tree_to_mat(self):
-        mask_mat, path_mat, child_mat = tree_to_mat(
-            {0: ['a', 1], 1: [3, 2], 3: ['e', 'c'], 2: ['d', 'b']},
-            {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4}
-        )
+        mask_mat, path_mat, child_mat = tree_to_mat(tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4})
         assert_array_equal(mask_mat, np.array([
             [1, 0, 0],
             [1, 1, 1],
@@ -56,10 +63,7 @@ class TestHierarchicalSoftmax(unittest.TestCase):
         context = T.matrix()
         W = T.matrix()
         b = T.vector()
-        mask_mat, path_mat, child_mat = tree_to_mat(
-            {0: ['a', 1], 1: [3, 2], 3: ['e', 'c'], 2: ['d', 'b']},
-            {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4}
-        )
+        mask_mat, path_mat, child_mat = tree_to_mat(tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4})
         res = theano.function(
             [context, W, b],
             hierarchical_softmax(
@@ -79,10 +83,7 @@ class TestHierarchicalSoftmax(unittest.TestCase):
         W = T.matrix()
         b = T.vector()
         target = T.ivector()
-        mask_mat, path_mat, child_mat = tree_to_mat(
-            {0: ['a', 1], 1: [3, 2], 3: ['e', 'c'], 2: ['d', 'b']},
-            {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4}
-        )
+        mask_mat, path_mat, child_mat = tree_to_mat(tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4})
         res = theano.function(
             [context, W, b, target],
             hierarchical_softmax_cross_entropy(

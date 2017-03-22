@@ -21,12 +21,15 @@ def read_tree(s, i=0):
         elif s.startswith(')', i):
             i += 1
             return ParsedNode(int(label), None, children), i
-        else:
+        elif s.startswith(' ', i):
+            i += 1
             word = word_re.match(s, i).group(0)
             i += len(word)
             assert s.startswith(')', i)
             i += 1
             return ParsedNode(int(label), word, None), i
+        else:
+            raise ValueError(s, i)
 
 
 def get_phrases(tree, accum=None):
