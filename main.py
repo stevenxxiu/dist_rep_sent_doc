@@ -1,15 +1,9 @@
-import csv
-import datetime
 import heapq
-import itertools
-import random
-from collections import Counter, namedtuple
-from collections import defaultdict
 
-import lasagne
 import numpy as np
 import theano.tensor as T
-from lasagne.nonlinearities import *
+
+from data import preprocess_data
 
 
 def build_huffman(word_to_freq):
@@ -75,42 +69,12 @@ def words_to_mat(words, step_size, word_to_index):
     pass
 
 
-def preprocess_data():
-    # get sentence ids
-    sent_split = {}
-    with open('../data/stanford_sentiment_treebank/datasetSplit.txt', encoding='utf-8') as sr:
-        for obj in csv.DictReader(sr):
-            sent_split[int(obj['sentence_index'])] = int(obj['splitset_label'])
-    # get sentences
-    train_sents, val_sents, test_sents = [], [], []
-    with open('../data/stanford_sentiment_treebank/datasetSentences.txt', encoding='utf-8') as sr:
-        for obj in csv.DictReader(sr, delimiter='\t'):
-            [train_sents, val_sents, test_sents][sent_split[int(obj['sentence_index'])] - 1] \
-                .append(obj['sentence'].split())
-    # get train phrases, the ids are node ids and not phrase ids
-    train_phrases = []
-    with open('../data/stanford_sentiment_treebank/STree.txt', encoding='utf-8') as tree_sr, \
-            open('../data/stanford_sentiment_treebank/SOStr.txt', encoding='utf-8') as str_sr:
-        for i, (tree_line, str_line) in enumerate(zip(tree_sr, str_sr)):
-            if sent_split[i + 1] == 1:
-                node_to_children = defaultdict(list)
-                for child, parent in enumerate(tree_line.split('|')):
-                    node_to_children[int(parent)].append(child + 1)  # 0 represents the root node
-                node_to_phrase = {j + 1: [word] for j, word in enumerate(str_line.strip().split('|'))}
-                for node in itertools.chain(
-                    range(len(node_to_phrase) + 1, len(node_to_phrase) + len(node_to_children)), [0]
-                ):
-                    node_to_phrase[node] = sum((node_to_phrase[child] for child in node_to_children[node]), [])
-                # verify that the longest train phrase matches the sentence
-                print(node_to_phrase[0])
-
-
 def run_model():
     pass
 
 
 def main():
-    preprocess_data()
+    train, val, test = preprocess_data('../data/stanford_sentiment_treebank/class_5')
 
 if __name__ == '__main__':
     main()
