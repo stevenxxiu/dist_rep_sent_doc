@@ -52,13 +52,22 @@ class HierarchicalSoftmaxLayer(lasagne.layers.Layer):
         return mask_mat, path_mat, child_mat
 
     def get_output_shape_for(self, input_shape):
-        return input_shape[:-1] + (None,)
+        # depends on wehther we have a target
+        return None
 
-    def get_output_for(self, input_, hs_target=slice(None), **kwargs):
+    def get_output_for(self, input_, hs_target=None, **kwargs):
         # sparse matrices are not implemented on the gpu yet
-        return T.sum(self.mask[hs_target].dimshuffle(('x', 0, 1)) * T.log(T.nnet.sigmoid(
-            self.child[hs_target].dimshuffle(('x', 0, 1)) * (
-                T.dot(self.W[self.path[hs_target]], input_.T).dimshuffle((2, 0, 1)) +
-                self.b[hs_target].dimshuffle((0, 'x'))
-            )
-        )), axis=-1)
+        if hs_target is None:
+            return T.sum(self.mask.dimshuffle(('x', 0, 1)) * T.log(T.nnet.sigmoid(
+                self.child.dimshuffle(('x', 0, 1)) * (
+                    T.dot(self.W[self.path], input_.T).dimshuffle((2, 0, 1)) +
+                    self.b.dimshuffle((0, 'x'))
+                )
+            )), axis=-1)
+        else:
+            return T.sum(self.mask[hs_target] * T.log(T.nnet.sigmoid(
+                self.child[hs_target] * (
+                    T.batched_dot(self.W[self.path[hs_target]], input_.T) +
+                    self.b[hs_target].dimshuffle((0, 'x'))
+                )
+            )), axis=-1)

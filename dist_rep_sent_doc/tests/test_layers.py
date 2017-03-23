@@ -4,9 +4,9 @@ from collections import namedtuple
 import lasagne
 import numpy as np
 import theano
-from theano import tensor as T
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 from scipy.special import expit
+from theano import tensor as T
 
 from dist_rep_sent_doc.layers import *
 
@@ -61,7 +61,7 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
             [1, -1, -1],
         ]))
 
-    def test_get_output_for(self):
+    def test_get_output_for_target(self):
         target = T.ivector('target')
         l_in = lasagne.layers.InputLayer((2, 2))
         l = HierarchicalSoftmaxLayer(
@@ -73,18 +73,30 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
             np.array([[.01, .02], [.03, .04]], dtype=np.float32),
             np.array([0, 1], dtype=np.int32)
         )
-        assert_array_almost_equal(res, np.array([[
+        assert_array_almost_equal(res, np.array([
+            np.log(1 - expit(np.dot([.01, .02], [.05, .06]) + 0.15)),
+            (
+                np.log(expit(np.dot([.03, .04], [.05, .06]) + 0.15)) +
+                np.log(expit(np.dot([.03, .04], [.07, .08]) + 0.16)) +
+                np.log(expit(np.dot([.03, .04], [.09, .10]) + 0.17))
+            )
+        ]), decimal=3)
+
+    def test_get_output_for(self):
+        l_in = lasagne.layers.InputLayer((2, 2))
+        l = HierarchicalSoftmaxLayer(
+            l_in, self.tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4},
+            W=np.array([[.05, .06], [.07, .08], [.09, .10], [.11, .12], [.13, .14]], dtype=np.float32),
+            b=np.array([.15, .16, .17, .18, .19], dtype=np.float32),
+        )
+        res = theano.function([l_in.input_var], lasagne.layers.get_output(l))(
+            np.array([[.01, .02], [.03, .04]], dtype=np.float32)
+        )
+        assert_array_almost_equal(res[0][:2], np.array([
             np.log(1 - expit(np.dot([.01, .02], [.05, .06]) + 0.15)),
             (
                 np.log(expit(np.dot([.01, .02], [.05, .06]) + 0.15)) +
                 np.log(expit(np.dot([.01, .02], [.07, .08]) + 0.16)) +
                 np.log(expit(np.dot([.01, .02], [.09, .10]) + 0.17))
             )
-        ], [
-            np.log(1 - expit(np.dot([.03, .04], [.05, .06]) + 0.15)),
-            (
-                np.log(expit(np.dot([.03, .04], [.05, .06]) + 0.15)) +
-                np.log(expit(np.dot([.03, .04], [.07, .08]) + 0.16)) +
-                np.log(expit(np.dot([.03, .04], [.09, .10]) + 0.17))
-            )
-        ]]), decimal=4)
+        ]), decimal=3)
