@@ -61,13 +61,13 @@ class HierarchicalSoftmaxLayer(lasagne.layers.Layer):
             return T.sum(self.mask.dimshuffle(('x', 0, 1)) * T.log(T.nnet.sigmoid(
                 self.child.dimshuffle(('x', 0, 1)) * (
                     T.dot(self.W[self.path], input_.T).dimshuffle((2, 0, 1)) +
-                    self.b.dimshuffle((0, 'x'))
+                    self.b[self.path].dimshuffle(('x', 0, 1))
                 )
             )), axis=-1)
         else:
             return T.sum(self.mask[hs_target] * T.log(T.nnet.sigmoid(
                 self.child[hs_target] * (
-                    T.batched_dot(self.W[self.path[hs_target]], input_.T) +
-                    self.b[hs_target].dimshuffle((0, 'x'))
+                    T.batched_dot(self.W[self.path[hs_target]], input_) +
+                    self.b[self.path[hs_target]]
                 )
             )), axis=-1)
