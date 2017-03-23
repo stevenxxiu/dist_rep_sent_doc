@@ -9,6 +9,10 @@ To normalize the dataset (the stanford tool does some regex replacements to fix 
 ## Unclear parts of the paper:
 What happens when the phrase is shorter than the window size + 1? Do we simply ignore phrases longer than it? This discards some training instances, so we pad the first words with 0s.
 
+It's slightly vague what window size means, is it just the size of the sliding window excluding the target word and document vector.
+
+The random initializatoins of the word embedding and softmax weights are not given.
+
 ## Code
 See whether using theano boolean masks are faster or multiplies by the mask are faster.
 
