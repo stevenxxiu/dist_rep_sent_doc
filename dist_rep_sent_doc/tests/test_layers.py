@@ -4,9 +4,9 @@ from collections import namedtuple
 import lasagne
 import numpy as np
 import theano
+import theano.tensor as T
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 from scipy.special import expit
-from theano import tensor as T
 
 from dist_rep_sent_doc.layers import *
 

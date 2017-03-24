@@ -67,7 +67,8 @@ class HierarchicalSoftmaxLayer(lasagne.layers.Layer):
         else:
             return T.sum(self.mask[hs_target] * T.log(T.nnet.sigmoid(
                 self.child[hs_target] * (
-                    T.batched_dot(self.W[self.path[hs_target]], input_) +
+                    T.batched_dot(self.W[self.path[hs_target]], input_.dimshuffle(0, 1, 'x'))
+                    .reshape((input_.shape[0], -1)) +
                     self.b[self.path[hs_target]]
                 )
             )), axis=-1)
