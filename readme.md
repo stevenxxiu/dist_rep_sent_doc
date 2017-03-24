@@ -13,6 +13,10 @@ It's slightly vague what window size means, is it just the size of the sliding w
 
 The random initializatoins of the word embedding and softmax weights are not given.
 
+The learning rate/gradient descent method is not specified.
+
+Hierarchical softmax usually has a bias, it is possibly not present in the paper.
+
 ## Code
 See whether using theano boolean masks are faster or multiplies by the mask are faster.
 
