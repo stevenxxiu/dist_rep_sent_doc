@@ -63,7 +63,7 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
 
     def test_get_output_for_target(self):
         target = T.ivector('target')
-        l_in = lasagne.layers.InputLayer((2, 2))
+        l_in = lasagne.layers.InputLayer((None, 2))
         l = HierarchicalSoftmaxLayer(
             l_in, self.tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4},
             W=np.array([[.01, .02], [.03, .04], [.05, .06], [.07, .08], [.09, .10]], dtype=np.float32),

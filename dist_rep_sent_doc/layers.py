@@ -58,17 +58,16 @@ class HierarchicalSoftmaxLayer(lasagne.layers.Layer):
     def get_output_for(self, input_, hs_target=None, **kwargs):
         # sparse matrices are not implemented on the gpu yet
         if hs_target is None:
-            return T.sum(self.mask.dimshuffle(('x', 0, 1)) * T.log(T.nnet.sigmoid(
+            return (self.mask.dimshuffle(('x', 0, 1)) * T.log(T.nnet.sigmoid(
                 self.child.dimshuffle(('x', 0, 1)) * (
                     T.dot(self.W[self.path], input_.T).dimshuffle((2, 0, 1)) +
                     self.b[self.path].dimshuffle(('x', 0, 1))
                 )
-            )), axis=-1)
+            ))).sum(-1)
         else:
-            return T.sum(self.mask[hs_target] * T.log(T.nnet.sigmoid(
+            return (self.mask[hs_target] * T.log(T.nnet.sigmoid(
                 self.child[hs_target] * (
-                    T.batched_dot(self.W[self.path[hs_target]], input_.dimshuffle(0, 1, 'x'))
-                    .reshape((input_.shape[0], -1)) +
+                    (self.W[self.path[hs_target]] * input_.dimshuffle(0, 'x', 1)).sum(2) +
                     self.b[self.path[hs_target]]
                 )
-            )), axis=-1)
+            ))).sum(-1)
