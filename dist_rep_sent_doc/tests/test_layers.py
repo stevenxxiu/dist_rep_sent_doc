@@ -26,64 +26,46 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
             )
         )
 
-    def test_tree_to_paths(self):
-        self.assertEqual(HierarchicalSoftmaxLayer._tree_to_paths(self.tree), {
-            'a': [(0, -1)],
-            'b': [(0, 1), (1, 1), (2, 1)],
-            'c': [(0, 1), (1, -1), (3, 1)],
-            'd': [(0, 1), (1, 1), (2, -1)],
-            'e': [(0, 1), (1, -1), (3, -1)],
+    def test_get_node_to_path(self):
+        l_in = lasagne.layers.InputLayer((None, 2))
+        l = HierarchicalSoftmaxLayer(l_in, self.tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4})
+        self.assertEqual(l._get_node_to_path(self.tree), {
+            0: [(0, -1)],
+            1: [(0, 1), (1, 1), (2, 1)],
+            2: [(0, 1), (1, -1), (3, 1)],
+            3: [(0, 1), (1, 1), (2, -1)],
+            4: [(0, 1), (1, -1), (3, -1)],
         })
-
-    def test_tree_to_mat(self):
-        mask_mat, path_mat, child_mat = HierarchicalSoftmaxLayer._tree_to_mat(self.tree, {
-            'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4
-        })
-        assert_array_equal(mask_mat, np.array([
-            [1, 0, 0],
-            [1, 1, 1],
-            [1, 1, 1],
-            [1, 1, 1],
-            [1, 1, 1],
-        ]))
-        assert_array_equal(path_mat, np.array([
-            [0, 0, 0],
-            [0, 1, 2],
-            [0, 1, 3],
-            [0, 1, 2],
-            [0, 1, 3],
-        ], dtype=int))
-        assert_array_equal(child_mat, np.array([
-            [-1, 0, 0],
-            [1, 1, 1],
-            [1, -1, 1],
-            [1, 1, -1],
-            [1, -1, -1],
-        ]))
 
     def test_get_output_for_target(self):
-        target = T.ivector('target')
+        hs_nodes = T.ivector('hs_nodes')
+        hs_signs = T.vector('hs_signs')
+        hs_indexes = T.ivector('hs_indexes')
         l_in = lasagne.layers.InputLayer((None, 2))
         l = HierarchicalSoftmaxLayer(
             l_in, self.tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4},
             W=np.array([[.01, .02], [.03, .04], [.05, .06], [.07, .08], [.09, .10]], dtype=np.float32),
             b=np.array([.11, .12, .13, .14, .15], dtype=np.float32),
         )
-        res = theano.function([l_in.input_var, target], lasagne.layers.get_output(l, hs_target=target))(
+        res = theano.function(
+            [l_in.input_var, hs_nodes, hs_signs, hs_indexes],
+            lasagne.layers.get_output(l, hs_nodes=hs_nodes, hs_signs=hs_signs, hs_indexes=hs_indexes),
+            on_unused_input='ignore'
+        )(
             np.array([[.16, .17], [.18, .19], [.20, .21]], dtype=np.float32),
-            np.array([0, 1, 2], dtype=np.int32),
+            *l.get_hs_inputs([0, 1, 2])
         )
-        assert_array_almost_equal(res, np.array([
-            np.log(1 - expit(np.dot([.16, .17], [.01, .02]) + 0.11)), (
+        assert_array_almost_equal(res, np.array(
+            np.log(1 - expit(np.dot([.16, .17], [.01, .02]) + 0.11)) + (
                 np.log(expit(np.dot([.18, .19], [.01, .02]) + 0.11)) +
                 np.log(expit(np.dot([.18, .19], [.03, .04]) + 0.12)) +
                 np.log(expit(np.dot([.18, .19], [.05, .06]) + 0.13))
-            ), (
+            ) + (
                 np.log(expit(np.dot([.20, .21], [.01, .02]) + 0.11)) +
                 np.log(1 - expit(np.dot([.20, .21], [.03, .04]) + 0.12)) +
                 np.log(expit(np.dot([.20, .21], [.07, .08]) + 0.14))
             )
-        ]), decimal=8)
+        ), decimal=8)
 
     def test_get_output_for(self):
         l_in = lasagne.layers.InputLayer((2, 2))
@@ -92,13 +74,13 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
             W=np.array([[.01, .02], [.03, .04], [.05, .06], [.07, .08], [.09, .10]], dtype=np.float32),
             b=np.array([.11, .12, .13, .14, .15], dtype=np.float32),
         )
-        res = theano.function([l_in.input_var], lasagne.layers.get_output(l))(
+        res = l.get_hs_outputs(theano.function([l_in.input_var], lasagne.layers.get_output(l))(
             np.array([[.16, .17], [.18, .19], [.20, .21]], dtype=np.float32),
-        )
+        ))
         assert_array_almost_equal(res[0][:2], np.array([
             np.log(1 - expit(np.dot([.16, .17], [.01, .02]) + 0.11)), (
                 np.log(expit(np.dot([.16, .17], [.01, .02]) + 0.11)) +
                 np.log(expit(np.dot([.16, .17], [.03, .04]) + 0.12)) +
                 np.log(expit(np.dot([.16, .17], [.05, .06]) + 0.13))
             )
-        ]), decimal=8)
+        ]), decimal=7)

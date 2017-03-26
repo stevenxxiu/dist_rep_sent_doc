@@ -68,15 +68,17 @@ def run_model(train, val, test, tree, word_to_index, window_size, embedding_size
     l_out = HierarchicalSoftmaxLayer(l_flatten, tree, word_to_index)
 
     # training outputs
-    target = T.ivector('target')
+    hs_nodes = T.ivector('hs_nodes')
+    hs_signs = T.vector('hs_signs')
+    hs_indexes = T.ivector('hs_indexes')
     network_output = lasagne.layers.get_output(l_out)
-    cost = -lasagne.layers.get_output(l_out, hs_target=target).mean()
+    cost = -lasagne.layers.get_output(l_out, hs_nodes=hs_nodes, hs_signs=hs_signs, hs_indexes=hs_indexes)
     all_params = lasagne.layers.get_all_params(l_out, trainable=True)
     updates = lasagne.updates.adadelta(cost, all_params)
 
     # functions
-    train = theano.function([mask_var, l_in.input_var, target], cost, updates=updates)
-    compute_cost = theano.function([mask_var, l_in.input_var, target], cost)
+    train = theano.function([mask_var, l_in.input_var, hs_nodes, hs_signs, hs_indexes], cost, updates=updates)
+    compute_cost = theano.function([mask_var, l_in.input_var, hs_nodes, hs_signs, hs_indexes], cost)
 
     for i in range(epoch_size):
         # generate minibatches
@@ -87,7 +89,7 @@ def run_model(train, val, test, tree, word_to_index, window_size, embedding_size
         for j in range(0, len(train_y), batch_size):
             batch_mask, batch_X, batch_y = \
                 train_mask[j:j + batch_size], train_X[j:j + batch_size], train_y[j:j + batch_size]
-            cost = train(batch_mask, batch_X, batch_y)
+            cost = train(batch_mask, batch_X, *l_out.get_hs_inputs(batch_y)) / batch_size
             if j % 2560 == 0:
                 print(datetime.datetime.now(), cost)
 
