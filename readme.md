@@ -7,15 +7,14 @@ To normalize the dataset (the stanford tool does some regex replacements to fix 
     java -cp stanford-corenlp-3.7.0.jar edu.stanford.nlp.sentiment.ReadSentimentDataset -numClasses 5 -inputDir ../data/_input/stanford_sentiment_treebank  -outputDir ../data/class_5/stanford_sentiment_treebank
 
 ## Unclear parts of the paper:
-What happens when the phrase is shorter than the window size + 1? Do we simply ignore phrases longer than it? This discards some training instances, so we pad the first words with 0s.
-
-It's slightly vague what window size means, is it just the size of the sliding window excluding the target word and document vector.
-
-The random initializatoins of the word embedding and softmax weights are not given.
+The random initializations of the word embedding and softmax weights are not given.
 
 The learning rate/gradient descent method is not specified.
 
 Hierarchical softmax usually has a bias, it is possibly not present in the paper.
+
+### Can be missed
+A detailed explanation to window size is in the Experimental Protocols section.
 
 ## Code
 See whether using theano boolean masks are faster or multiplies by the mask are faster.
