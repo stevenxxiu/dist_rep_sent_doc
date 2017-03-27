@@ -11,7 +11,9 @@ The random initializations of the word embedding and softmax weights are not giv
 
 The learning rate/gradient descent method is not specified.
 
-Hierarchical softmax usually has a bias, it is possibly not present in the paper.
+Hierarchical softmax usually has a bias, it is not described `Distributed representations of words and phrases and their compositionality` paper, but the paper does say "... softmax weights U, b and paragraph vectors D` ...", so we suppose that there is a bias.
+
+It is not described how unknown words during validation are handled.
 
 ### Can be missed
 A detailed explanation to window size is in the Experimental Protocols section.

@@ -11,9 +11,9 @@ class HierarchicalSoftmaxLayer(base._Layer):
     def __init__(
         self, tree, node_id_to_index,
         W_initializer=init_ops.glorot_uniform_initializer(), b_initializer=init_ops.zeros_initializer(),
-        trainable=True, name=None, **kwargs
+        name=None, **kwargs
     ):
-        super().__init__(trainable=trainable, name=name, **kwargs)
+        super().__init__(name=name, **kwargs)
         self.tree = tree
         self.node_id_to_index = node_id_to_index
         self.node_to_path = self._get_node_to_path(tree)
@@ -40,11 +40,11 @@ class HierarchicalSoftmaxLayer(base._Layer):
         input_shape = tensor_shape.TensorShape(input_shape)
         self.W = vs.get_variable(
             'W', shape=[len(self.node_id_to_index), input_shape[-1].value],
-            initializer=self.W_initializer, dtype=self.dtype, trainable=self.trainable
+            initializer=self.W_initializer, dtype=self.dtype
         )
         self.b = vs.get_variable(
             'b', shape=[len(self.node_id_to_index)],
-            initializer=self.b_initializer, dtype=self.dtype, trainable=self.trainable
+            initializer=self.b_initializer, dtype=self.dtype
         )
 
     def call(self, inputs, training=False):

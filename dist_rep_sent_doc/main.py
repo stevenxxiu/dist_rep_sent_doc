@@ -1,4 +1,6 @@
 import datetime
+import os
+import uuid
 from collections import Counter
 
 import joblib
@@ -48,52 +50,70 @@ def gen_data(path, window_size):
     )
 
 
-def run_model(train, val, test, tree, word_to_index, window_size, embedding_size, batch_size, epoch_size):
-    train_X, train_y = train
-    val_X, val_y = val
-    test_X, test_y = test
+@memory.cache(ignore=['data'])
+def run_pv_dm(
+    name, data, training_, tree, word_to_index, window_size, embedding_size, batch_size, epoch_size,
+    train_model_name=None
+):
+    data_X, data_y = data
 
-    # training data
+    # network
     X = tf.placeholder(tf.int32, [None, window_size])
-    training = tf.placeholder(tf.bool, [])
-    emb = tf.nn.embedding_lookup(tf.Variable(tf.random_normal(
-        [len(word_to_index) + len(train_X), embedding_size], stddev=0.01)
-    ), X)
+    word_emb = tf.Variable(tf.random_normal([len(word_to_index), embedding_size]))
+    doc_emb = tf.Variable(tf.random_normal([len(data_X), embedding_size]))
+    emb = tf.nn.embedding_lookup(tf.concat([word_emb, doc_emb], 0), X)
     flatten = tf.reshape(emb, [-1, window_size * embedding_size])
     l = HierarchicalSoftmaxLayer(tree, word_to_index, name='hs')
-    cost = -l.apply(flatten, training=training)
+    cost = -l.apply(flatten, training=True)
     hs_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='hs')
     opt = tf.train.AdadeltaOptimizer(1.0)
     grads_and_vars = opt.compute_gradients(cost)
-    # don't use sparse gradients in hierarchical softmax for speed
-    for i, (grad, var) in enumerate(grads_and_vars):
-        if var in hs_vars:
-            grads_and_vars[i] = (ops.convert_to_tensor(grad), var)
+    if training_:
+        # don't use sparse gradients in hierarchical softmax for speed
+        for i, (grad, var) in enumerate(grads_and_vars):
+            if var in hs_vars:
+                grads_and_vars[i] = (ops.convert_to_tensor(grad), var)
+    else:
+        # only train document embeddings
+        grads_and_vars = [(grad, var) for grad, var in grads_and_vars if var == doc_emb]
     train = opt.apply_gradients(grads_and_vars)
 
+    # run
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        for i in range(epoch_size):
-            # generate minibatches
-            p = np.random.permutation(len(train_y))
+        # load trained model if we are doing inference
+        if not training_:
+            saver = tf.train.import_meta_graph(f'{train_model_name}.meta')
+            saver.restore(sess, train_model_name)
 
-            # train
-            train_X, train_y = train_X[p], train_y[p]
-            for j in range(0, len(train_y), batch_size):
-                batch_X, batch_y = train_X[j:j + batch_size], train_y[j:j + batch_size]
-                sess.run(train, feed_dict={X: batch_X, training: True, **l.get_hs_inputs(batch_y)})
+        # train
+        for i in range(epoch_size):
+            p = np.random.permutation(len(data_y))
+            data_X, data_y = data_X[p], data_y[p]
+            for j in range(0, len(data_y), batch_size):
+                batch_X, batch_y = data_X[j:j + batch_size], data_y[j:j + batch_size]
+                feed_dict = {X: batch_X, **l.get_hs_inputs(batch_y)}
+                sess.run(train, feed_dict=feed_dict)
                 if j % 256000 == 0:
-                    print(
-                        datetime.datetime.now(), j,
-                        sess.run(cost, feed_dict={X: batch_X, training: True, **l.get_hs_inputs(batch_y)})
-                    )
+                    print(datetime.datetime.now(), j, sess.run(cost, feed_dict=feed_dict))
+
+        # save model
+        name = os.path.join('__cache__', str(uuid.uuid4()))
+        saver = tf.train.Saver([word_emb, doc_emb, *hs_vars])
+        saver.save(sess, name)
+        return name
 
 
 def main():
-    run_model(
-        *gen_data('../data/stanford_sentiment_treebank/class_5', window_size=8),
-        window_size=8, embedding_size=400, batch_size=256, epoch_size=10
+    train, val, test, tree, word_to_index = gen_data('../data/stanford_sentiment_treebank/class_5', window_size=8)
+    pv_dm_train_name = run_pv_dm(
+        'train_5', train, training_=True, tree=tree, word_to_index=word_to_index, window_size=8, embedding_size=400,
+        batch_size=256, epoch_size=10
+    )
+    pv_dm_val_name = run_pv_dm(
+        'val_5', val, training_=False, tree=tree, word_to_index=word_to_index, window_size=8, embedding_size=400,
+        batch_size=256, epoch_size=10, train_model_name=pv_dm_train_name
     )
 
 if __name__ == '__main__':
