@@ -23,7 +23,7 @@ def docs_to_mat(docs, window_size, word_to_index):
             doc.append([i])
             words.append(word_indexes[j:j + window_size - 1])
             target.append(word_indexes[j + window_size - 1])
-    return np.array(doc), np.array(words), np.array(target)
+    return len(docs), np.array(doc), np.array(words), np.array(target)
 
 
 @memory.cache
@@ -53,12 +53,12 @@ def run_pv_dm(
     name, data, training_, tree, word_to_index, window_size, embedding_size, batch_size, epoch_size,
     train_model_name=None
 ):
-    data_X_docs, data_X_words, data_y = data
+    data_n_docs, data_X_docs, data_X_words, data_y = data
 
     # network
     X_docs = tf.placeholder(tf.int32, [None, 1])
     X_words = tf.placeholder(tf.int32, [None, window_size - 1])
-    doc_emb = tf.Variable(tf.random_normal([len(data_y), embedding_size]))
+    doc_emb = tf.Variable(tf.random_normal([data_n_docs, embedding_size]))
     word_emb = tf.Variable(tf.random_normal([len(word_to_index), embedding_size]))
     emb = tf.concat([tf.nn.embedding_lookup(doc_emb, X_docs), tf.nn.embedding_lookup(word_emb, X_words)], 1)
     flatten = tf.reshape(emb, [-1, window_size * embedding_size])
