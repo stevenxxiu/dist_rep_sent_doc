@@ -2,11 +2,9 @@ import datetime
 from collections import Counter
 
 import joblib
-import lasagne
 import numpy as np
-import theano
-import theano.tensor as T
 
+import tensorflow as tf
 from dist_rep_sent_doc.data import preprocess_data
 from dist_rep_sent_doc.huffman import build_huffman
 from dist_rep_sent_doc.layers import HierarchicalSoftmaxLayer
@@ -54,37 +52,31 @@ def run_model(train, val, test, tree, word_to_index, window_size, embedding_size
     val_X, val_y = val
     test_X, test_y = test
 
-    # training network
-    words_var = T.imatrix('words')
-    l_in = lasagne.layers.InputLayer((None, window_size), words_var)
-    l_emb = lasagne.layers.EmbeddingLayer(l_in, len(word_to_index) + len(train_y), embedding_size)
-    l_flatten = lasagne.layers.FlattenLayer(l_emb)
-    l_out = HierarchicalSoftmaxLayer(l_flatten, tree, word_to_index)
+    # training data
+    X = tf.placeholder(tf.int32, [None, window_size])
+    training = tf.placeholder(tf.bool, [])
+    emb = tf.nn.embedding_lookup(tf.Variable(tf.random_normal(
+        [len(word_to_index) + len(train_X), embedding_size], stddev=0.01)
+    ), X)
+    flatten = tf.reshape(emb, [-1, window_size * embedding_size])
+    l = HierarchicalSoftmaxLayer(tree, word_to_index)
+    cost = -l.apply(flatten, training=training)
+    train = tf.train.AdadeltaOptimizer(1.0).minimize(cost)
 
-    # training outputs
-    hs_nodes = T.ivector('hs_nodes')
-    hs_signs = T.vector('hs_signs')
-    hs_indexes = T.ivector('hs_indexes')
-    network_output = lasagne.layers.get_output(l_out)
-    cost = -lasagne.layers.get_output(l_out, hs_nodes=hs_nodes, hs_signs=hs_signs, hs_indexes=hs_indexes)
-    all_params = lasagne.layers.get_all_params(l_out, trainable=True)
-    updates = lasagne.updates.adadelta(cost, all_params)
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
 
-    # functions
-    train = theano.function([l_in.input_var, hs_nodes, hs_signs, hs_indexes], cost, updates=updates)
-    compute_cost = theano.function([l_in.input_var, hs_nodes, hs_signs, hs_indexes], cost)
+        for i in range(epoch_size):
+            # generate minibatches
+            p = np.random.permutation(len(train_y))
 
-    for i in range(epoch_size):
-        # generate minibatches
-        p = np.random.permutation(len(train_y))
-
-        # train
-        train_X, train_y = train_X[p], train_y[p]
-        for j in range(0, len(train_y), batch_size):
-            batch_X, batch_y = train_X[j:j + batch_size], train_y[j:j + batch_size]
-            cost = train(batch_X, *l_out.get_hs_inputs(batch_y)) / batch_size
-            if j % 2560 == 0:
-                print(datetime.datetime.now(), cost)
+            # train
+            train_X, train_y = train_X[p], train_y[p]
+            for j in range(0, len(train_y), batch_size):
+                batch_X, batch_y = train_X[j:j + batch_size], train_y[j:j + batch_size]
+                sess.run(train, feed_dict={X: batch_X, training: True, **l.get_hs_inputs(batch_y)})
+                if j % 2560 == 0:
+                    print(datetime.datetime.now())
 
 
 def main():

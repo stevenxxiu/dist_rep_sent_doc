@@ -1,21 +1,27 @@
 import numpy as np
-import lasagne
-import theano.tensor as T
-from lasagne import init
+import tensorflow as tf
+from tensorflow.python.framework import tensor_shape
+from tensorflow.python.layers import base, utils
+from tensorflow.python.ops import variable_scope as vs
+from tensorflow.python.ops import init_ops
 
-__all__ = ['HierarchicalSoftmaxLayer']
 
-
-class HierarchicalSoftmaxLayer(lasagne.layers.Layer):
+# noinspection PyProtectedMember,PyAttributeOutsideInit
+class HierarchicalSoftmaxLayer(base._Layer):
     def __init__(
-        self, incoming, tree, node_id_to_index, W=init.GlorotUniform(), b=init.Constant(0.), **kwargs
+        self, tree, node_id_to_index,
+        W_initializer=init_ops.glorot_uniform_initializer(), b_initializer=init_ops.zeros_initializer(),
+        trainable=True, name=None, **kwargs
     ):
-        super().__init__(incoming, **kwargs)
+        super().__init__(trainable=trainable, name=name, **kwargs)
         self.tree = tree
         self.node_id_to_index = node_id_to_index
         self.node_to_path = self._get_node_to_path(tree)
-        self.W = self.add_param(W, (len(node_id_to_index), incoming.output_shape[-1]), name='W')
-        self.b = self.add_param(b, (len(node_id_to_index),), name='b')
+        self.W_initializer = W_initializer
+        self.b_initializer = b_initializer
+        self.hs_nodes = tf.placeholder(tf.int32, [None])
+        self.hs_signs = tf.placeholder(tf.float32, [None])
+        self.hs_indexes = tf.placeholder(tf.int32, [None])
 
     def _get_node_to_path(self, tree):
         '''
@@ -30,22 +36,30 @@ class HierarchicalSoftmaxLayer(lasagne.layers.Layer):
         else:
             return {self.node_id_to_index[tree.id_]: []}
 
-    def get_output_shape_for(self, input_shape):
-        # depends on wehther we have a target
-        return None
+    def build(self, input_shape):
+        input_shape = tensor_shape.TensorShape(input_shape)
+        self.W = vs.get_variable(
+            'W', shape=[len(self.node_id_to_index), input_shape[-1].value],
+            initializer=self.W_initializer, dtype=self.dtype, trainable=self.trainable
+        )
+        self.b = vs.get_variable(
+            'b', shape=[len(self.node_id_to_index)],
+            initializer=self.b_initializer, dtype=self.dtype, trainable=self.trainable
+        )
 
-    def get_output_for(self, input_, hs_nodes=None, hs_signs=None, hs_indexes=None, **kwargs):
-        # sparse matrices are not implemented on the gpu yet
-        if hs_nodes is None:
-            return T.log(T.nnet.sigmoid(T.stack([
-                -(T.dot(input_, self.W.T) + self.b),
-                T.dot(input_, self.W.T) + self.b
+    def call(self, inputs, training=False):
+        # XXX try out sparse matrices to see if there's a speed up
+        return utils.smart_cond(
+            training,
+            lambda: tf.reduce_sum(tf.log(tf.nn.sigmoid(self.hs_signs * (
+                tf.reduce_sum(tf.gather(self.W, self.hs_nodes) * tf.gather(inputs, self.hs_indexes), 1) +
+                tf.gather(self.b, self.hs_nodes)
+            )))) / tf.cast(tf.shape(inputs)[0], tf.float32),
+            lambda: tf.log(tf.nn.sigmoid(tf.stack([
+                -(tf.matmul(inputs, tf.transpose(self.W)) + self.b),
+                tf.matmul(inputs, tf.transpose(self.W)) + self.b
             ])))
-        else:
-            return T.log(T.nnet.sigmoid(hs_signs * (
-                (self.W[hs_nodes] * input_[hs_indexes]).sum(1) +
-                self.b[hs_nodes]
-            ))).sum()
+        )
 
     def get_hs_inputs(self, target):
         hs_nodes, hs_signs, hs_indexes = [], [], []
@@ -54,7 +68,7 @@ class HierarchicalSoftmaxLayer(lasagne.layers.Layer):
                 hs_nodes.append(node)
                 hs_signs.append(sign)
                 hs_indexes.append(i)
-        return hs_nodes, hs_signs, hs_indexes
+        return {self.hs_nodes: hs_nodes, self.hs_signs: hs_signs, self.hs_indexes: hs_indexes}
 
     def get_hs_outputs(self, output):
         res = np.zeros((len(output), len(self.node_id_to_index)))
