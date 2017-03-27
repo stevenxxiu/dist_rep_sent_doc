@@ -16,12 +16,8 @@ class HierarchicalSoftmaxLayer(base._Layer):
         super().__init__(trainable=trainable, name=name, **kwargs)
         self.tree = tree
         self.node_id_to_index = node_id_to_index
-        self.node_to_path = self._get_node_to_path(tree)
         self.W_initializer = W_initializer
         self.b_initializer = b_initializer
-        self.hs_nodes = tf.placeholder(tf.int32, [None])
-        self.hs_signs = tf.placeholder(tf.float32, [None])
-        self.hs_indexes = tf.placeholder(tf.int32, [None])
 
     def _get_node_to_path(self, tree):
         '''
@@ -37,43 +33,49 @@ class HierarchicalSoftmaxLayer(base._Layer):
             return {self.node_id_to_index[tree.id_]: []}
 
     def build(self, input_shape):
-        input_shape = tensor_shape.TensorShape(input_shape)
+        node_to_path = self._get_node_to_path(self.tree)
+        emb_dim = input_shape[0][-1].value
         self.W = vs.get_variable(
-            'W', shape=[len(self.node_id_to_index), input_shape[-1].value],
+            'W', shape=[len(self.node_id_to_index), emb_dim],
             initializer=self.W_initializer, dtype=self.dtype, trainable=self.trainable
         )
         self.b = vs.get_variable(
             'b', shape=[len(self.node_id_to_index)],
             initializer=self.b_initializer, dtype=self.dtype, trainable=self.trainable
         )
-
-    def call(self, inputs, training=False):
-        # XXX try out sparse matrices to see if there's a speed up
-        return utils.smart_cond(
-            training,
-            lambda: tf.reduce_sum(tf.log(tf.nn.sigmoid(self.hs_signs * (
-                tf.reduce_sum(tf.gather(self.W, self.hs_nodes) * tf.gather(inputs, self.hs_indexes), 1) +
-                tf.gather(self.b, self.hs_nodes)
-            )))) / tf.cast(tf.shape(inputs)[0], tf.float32),
-            lambda: tf.log(tf.nn.sigmoid(tf.stack([
-                -(tf.matmul(inputs, tf.transpose(self.W)) + self.b),
-                tf.matmul(inputs, tf.transpose(self.W)) + self.b
-            ])))
+        max_path = max(len(path) for path in node_to_path.values())
+        self.path_signs = np.zeros((len(self.node_id_to_index), max_path))
+        indices, data_indices = [], []
+        for i in range(len(self.node_id_to_index)):
+            for j, (node, sign) in enumerate(node_to_path[i]):
+                indices.extend([i, j, k] for k in range(emb_dim))
+                data_indices.append(node)
+                self.path_signs[i][j] = sign
+        self.path_W = tf.SparseTensor(
+            indices=indices, values=tf.reshape(tf.gather(self.W, data_indices), [-1]),
+            dense_shape=(len(self.node_id_to_index), max_path, emb_dim)
         )
 
-    def get_hs_inputs(self, target):
-        hs_nodes, hs_signs, hs_indexes = [], [], []
-        for i, target_ in enumerate(target):
-            for node, sign in self.node_to_path[target_]:
-                hs_nodes.append(node)
-                hs_signs.append(sign)
-                hs_indexes.append(i)
-        return {self.hs_nodes: hs_nodes, self.hs_signs: hs_signs, self.hs_indexes: hs_indexes}
+    def call(self, inputs, training=False):
+        # # XXX try out sparse matrices to see if there's a speed up
+        # return utils.smart_cond(
+        #     training,
+        #     lambda: tf.reduce_sum(tf.log(tf.nn.sigmoid(self.hs_signs * (
+        #         tf.reduce_sum(tf.gather(self.W, self.hs_nodes) * tf.gather(inputs, self.hs_indexes), 1) +
+        #         tf.gather(self.b, self.hs_nodes)
+        #     )))) / tf.cast(tf.shape(inputs)[0], tf.float32),
+        #     lambda: tf.log(tf.nn.sigmoid(tf.stack([
+        #         -(tf.matmul(inputs, tf.transpose(self.W)) + self.b),
+        #         tf.matmul(inputs, tf.transpose(self.W)) + self.b
+        #     ])))
+        # )
+        X, y = inputs
+        return tf.gather(self.path_W, y)
 
-    def get_hs_outputs(self, output):
-        res = np.zeros((len(output), len(self.node_id_to_index)))
-        for i, output_ in enumerate(output):
-            for j in range(len(self.node_id_to_index)):
-                for node, sign in self.node_to_path[j]:
-                    res[i][j] += output[0 if sign == -1 else 1][i][node]
-        return res
+    # def get_hs_outputs(self, output):
+    #     res = np.zeros((len(output), len(self.node_id_to_index)))
+    #     for i, output_ in enumerate(output):
+    #         for j in range(len(self.node_id_to_index)):
+    #             for node, sign in self.node_to_path[j]:
+    #                 res[i][j] += output[0 if sign == -1 else 1][i][node]
+    #     return res
