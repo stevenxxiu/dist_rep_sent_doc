@@ -3,8 +3,9 @@ from collections import Counter
 
 import joblib
 import numpy as np
-
 import tensorflow as tf
+from tensorflow.python.framework import ops
+
 from dist_rep_sent_doc.data import preprocess_data
 from dist_rep_sent_doc.huffman import build_huffman
 from dist_rep_sent_doc.layers import HierarchicalSoftmaxLayer
@@ -59,10 +60,16 @@ def run_model(train, val, test, tree, word_to_index, window_size, embedding_size
         [len(word_to_index) + len(train_X), embedding_size], stddev=0.01)
     ), X)
     flatten = tf.reshape(emb, [-1, window_size * embedding_size])
-    l = HierarchicalSoftmaxLayer(tree, word_to_index)
+    l = HierarchicalSoftmaxLayer(tree, word_to_index, name='hs')
     cost = -l.apply(flatten, training=training)
-    tf.train.AdadeltaOptimizer._apply_sparse = tf.train.AdadeltaOptimizer._apply_dense
-    train = tf.train.AdadeltaOptimizer(1.0).minimize(cost)
+    hs_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='hs')
+    opt = tf.train.AdadeltaOptimizer(1.0)
+    grads_and_vars = opt.compute_gradients(cost)
+    # don't use sparse gradients in hierarchical softmax for speed
+    for i, (grad, var) in enumerate(grads_and_vars):
+        if var in hs_vars:
+            grads_and_vars[i] = (ops.convert_to_tensor(grad), var)
+    train = opt.apply_gradients(grads_and_vars)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -76,8 +83,11 @@ def run_model(train, val, test, tree, word_to_index, window_size, embedding_size
             for j in range(0, len(train_y), batch_size):
                 batch_X, batch_y = train_X[j:j + batch_size], train_y[j:j + batch_size]
                 sess.run(train, feed_dict={X: batch_X, training: True, **l.get_hs_inputs(batch_y)})
-                if j % 2560 == 0:
-                    print(datetime.datetime.now())
+                if j % 256000 == 0:
+                    print(
+                        datetime.datetime.now(), j,
+                        sess.run(cost, feed_dict={X: batch_X, training: True, **l.get_hs_inputs(batch_y)})
+                    )
 
 
 def main():
