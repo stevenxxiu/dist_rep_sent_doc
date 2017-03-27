@@ -20,7 +20,7 @@ def docs_to_mat(docs, window_size, word_to_index):
     for i, doc_ in enumerate(docs):
         word_indexes = (window_size - 1) * [word_to_index['<null>']] + [word_to_index[word] for word in doc_[1]]
         for j in range(len(doc_[1])):
-            doc.append([i])
+            doc.append(i)
             words.append(word_indexes[j:j + window_size - 1])
             target.append(word_indexes[j + window_size - 1])
     return len(docs), np.array(doc), np.array(words), np.array(target)
@@ -53,14 +53,17 @@ def run_pv_dm(
     name, data, training_, tree, word_to_index, window_size, embedding_size, batch_size, epoch_size,
     train_model_name=None
 ):
-    data_n_docs, data_X_docs, data_X_words, data_y = data
+    data_n_docs, data_X_doc, data_X_words, data_y = data
 
     # network
-    X_docs = tf.placeholder(tf.int32, [None, 1])
+    X_doc = tf.placeholder(tf.int32, [None])
     X_words = tf.placeholder(tf.int32, [None, window_size - 1])
     doc_emb = tf.Variable(tf.random_normal([data_n_docs, embedding_size]))
     word_emb = tf.Variable(tf.random_normal([len(word_to_index), embedding_size]))
-    emb = tf.concat([tf.nn.embedding_lookup(doc_emb, X_docs), tf.nn.embedding_lookup(word_emb, X_words)], 1)
+    emb = tf.concat([
+        tf.reshape(tf.nn.embedding_lookup(doc_emb, X_doc), [-1, 1, embedding_size]),
+        tf.nn.embedding_lookup(word_emb, X_words)
+    ], 1)
     flatten = tf.reshape(emb, [-1, window_size * embedding_size])
     l = HierarchicalSoftmaxLayer(tree, word_to_index, name='hs')
     cost = -l.apply(flatten, training=True)
@@ -89,11 +92,11 @@ def run_pv_dm(
         # train
         for i in range(epoch_size):
             p = np.random.permutation(len(data_y))
-            data_X_docs, data_X_words, data_y = data_X_docs[p], data_X_words[p], data_y[p]
+            data_X_doc, data_X_words, data_y = data_X_doc[p], data_X_words[p], data_y[p]
             for j in range(0, len(data_y), batch_size):
-                batch_X_docs, batch_X_words, batch_y = \
-                    data_X_docs[j:j + batch_size], data_X_words[j:j + batch_size], data_y[j:j + batch_size]
-                feed_dict = {X_docs: batch_X_docs, X_words: batch_X_words, **l.get_hs_inputs(batch_y)}
+                batch_X_doc, batch_X_words, batch_y = \
+                    data_X_doc[j:j + batch_size], data_X_words[j:j + batch_size], data_y[j:j + batch_size]
+                feed_dict = {X_doc: batch_X_doc, X_words: batch_X_words, **l.get_hs_inputs(batch_y)}
                 sess.run(train, feed_dict=feed_dict)
                 if j % 256000 == 0:
                     print(datetime.datetime.now(), j, sess.run(cost, feed_dict=feed_dict))
