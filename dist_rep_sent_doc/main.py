@@ -61,6 +61,7 @@ def run_model(train, val, test, tree, word_to_index, window_size, embedding_size
     flatten = tf.reshape(emb, [-1, window_size * embedding_size])
     l = HierarchicalSoftmaxLayer(tree, word_to_index)
     cost = -l.apply(flatten, training=training)
+    tf.train.AdadeltaOptimizer._apply_sparse = tf.train.AdadeltaOptimizer._apply_dense
     train = tf.train.AdadeltaOptimizer(1.0).minimize(cost)
 
     with tf.Session() as sess:
