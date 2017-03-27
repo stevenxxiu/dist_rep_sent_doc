@@ -48,7 +48,6 @@ class HierarchicalSoftmaxLayer(base._Layer):
         )
 
     def call(self, inputs, training=False):
-        # XXX try out sparse matrices to see if there's a speed up
         return utils.smart_cond(
             training,
             lambda: tf.reduce_sum(tf.log(tf.nn.sigmoid(self.hs_signs * (
