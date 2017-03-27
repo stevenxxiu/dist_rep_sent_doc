@@ -112,11 +112,11 @@ def main():
     train, val, test, tree, word_to_index = gen_data('../data/stanford_sentiment_treebank/class_5', window_size=8)
     pv_dm_train_name = run_pv_dm(
         'train_5', train, training_=True, tree=tree, word_to_index=word_to_index, window_size=8, embedding_size=400,
-        batch_size=256, epoch_size=10
+        batch_size=256, epoch_size=20
     )
     pv_dm_val_name = run_pv_dm(
         'val_5', val, training_=False, tree=tree, word_to_index=word_to_index, window_size=8, embedding_size=400,
-        batch_size=256, epoch_size=10, train_model_name=pv_dm_train_name
+        batch_size=256, epoch_size=100, train_model_name=pv_dm_train_name
     )
 
 if __name__ == '__main__':
