@@ -95,7 +95,7 @@ def run_pv_dm(
                     data_X_docs[j:j + batch_size], data_X_words[j:j + batch_size], data_y[j:j + batch_size]
                 feed_dict = {X_docs: batch_X_docs, X_words: batch_X_words, **l.get_hs_inputs(batch_y)}
                 sess.run(train, feed_dict=feed_dict)
-                if j % 25600 == 0:
+                if j % 256000 == 0:
                     print(datetime.datetime.now(), j, sess.run(cost, feed_dict=feed_dict))
 
         # save model
