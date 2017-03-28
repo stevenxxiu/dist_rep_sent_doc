@@ -55,8 +55,8 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_va
     config = projector.ProjectorConfig()
     for emb_name, emb in [('doc', emb_doc), ('word', emb_word)]:
         emb_conf = config.embeddings.add()
-        emb_conf.tensor_name = emb.name
-        emb_conf.metadata_path = os.path.join(path, f'{emb_name}_metadata.tsv')
+        emb_conf.tensor_name = emb_name
+        emb_conf.metadata_path = os.path.abspath(os.path.join(path, f'{emb_name}_metadata.tsv'))
         with open(emb_conf.metadata_path, 'w', newline='', encoding='utf-8') as csvfile:
             writer = csv.writer(csvfile, delimiter='\t')
             writer.writerow(['Word', 'Frequency'])
