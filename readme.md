@@ -15,6 +15,8 @@ Hierarchical softmax usually has a bias, it is not described `Distributed repres
 
 It is not described how unknown words during validation are handled.
 
+It is not described what process of fitting the logistic regression is used, we use sklearn's defaults.
+
 ### Can be missed
 A detailed explanation to window size is in the Experimental Protocols section.
 

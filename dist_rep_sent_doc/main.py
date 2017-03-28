@@ -7,6 +7,7 @@ from collections import Counter
 import joblib
 import numpy as np
 import tensorflow as tf
+from sklearn.linear_model import LogisticRegression
 from tensorflow.contrib.tensorboard.plugins import projector
 from tensorflow.python.framework import ops
 
@@ -140,6 +141,8 @@ def run_pv_dm(
 def main():
     train_docs, train_mats, val_docs, val_mats, test_docs, test_mats, tree, word_to_index, word_to_freq = \
         gen_data('../data/stanford_sentiment_treebank/class_5', window_size=8)
+
+    # pv dm
     pv_dm_train_path = run_pv_dm(
         'train_5', train_docs, train_mats, tree, word_to_index, word_to_freq, training_=True, window_size=8,
         embedding_size=400, lr=10, batch_size=256, epoch_size=20
@@ -148,6 +151,17 @@ def main():
         'val_5', val_docs, val_mats, tree, word_to_index, word_to_freq, training_=False, window_size=8,
         embedding_size=400, lr=1000, batch_size=256, epoch_size=100, train_model_path=pv_dm_train_path
     )
+
+    # log reg
+    with tf.Session() as sess:
+        pv_dm_train = tf.Variable(tf.zeros([len(train_docs), 400]))
+        pv_dm_val = tf.Variable(tf.zeros([len(val_docs), 400]))
+        tf.train.Saver({'emb_doc': pv_dm_train}).restore(sess, os.path.join(pv_dm_train_path, 'model.ckpt'))
+        tf.train.Saver({'emb_doc': pv_dm_val}).restore(sess, os.path.join(pv_dm_val_path, 'model.ckpt'))
+        logreg = LogisticRegression()
+        logreg.fit(pv_dm_train.eval(sess), [doc[0] for doc in train_docs])
+        print(logreg.score(pv_dm_val.eval(sess), [doc[0] for doc in val_docs]))
+
 
 if __name__ == '__main__':
     main()
