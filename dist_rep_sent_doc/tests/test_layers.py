@@ -43,19 +43,19 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             res = sess.run(cost, feed_dict={
-                X: np.array([[.16, .17], [.18, .19], [.20, .21]]), **l.get_hs_inputs([0, 1, 2])
+                X: np.array([[.16, .17], [.18, .19], [.20, .21]]), **l.get_hs_inputs([2, 1, 0])
             })
             assert_array_almost_equal(res, np.array([
-                np.log(1 - expit(np.dot([.16, .17], [.01, .02]) + 0.11)), (
+                (
+                    np.log(expit(np.dot([.16, .17], [.01, .02]) + 0.11)) +
+                    np.log(1 - expit(np.dot([.16, .17], [.03, .04]) + 0.12)) +
+                    np.log(expit(np.dot([.16, .17], [.07, .08]) + 0.14))
+                ), (
                     np.log(expit(np.dot([.18, .19], [.01, .02]) + 0.11)) +
                     np.log(expit(np.dot([.18, .19], [.03, .04]) + 0.12)) +
                     np.log(expit(np.dot([.18, .19], [.05, .06]) + 0.13))
-                ), (
-                    np.log(expit(np.dot([.20, .21], [.01, .02]) + 0.11)) +
-                    np.log(1 - expit(np.dot([.20, .21], [.03, .04]) + 0.12)) +
-                    np.log(expit(np.dot([.20, .21], [.07, .08]) + 0.14))
-                )
-            ]).mean(), decimal=8)
+                ), np.log(1 - expit(np.dot([.20, .21], [.01, .02]) + 0.11))
+            ]).mean(), decimal=7)
 
     def test_get_output_for(self):
         X = tf.placeholder(tf.float32, [None, 2])
