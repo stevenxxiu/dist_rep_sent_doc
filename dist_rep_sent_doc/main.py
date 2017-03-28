@@ -50,23 +50,20 @@ def gen_data(path, window_size):
     )
 
 
-def save_model(name, docs, word_to_index, word_to_freq, doc_emb, word_emb, hs_vars, sess):
-    path = os.path.join('__cache__', 'tf', f'{name}-{uuid.uuid4()}')
-    os.makedirs(path)
-
+def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_vars, sess):
     # visualize embeddings
     config = projector.ProjectorConfig()
-    for emb_name, emb in [('doc', doc_emb), ('word', word_emb)]:
+    for emb_name, emb in [('doc', emb_doc), ('word', emb_word)]:
         emb_conf = config.embeddings.add()
         emb_conf.tensor_name = emb.name
         emb_conf.metadata_path = os.path.join(path, f'{emb_name}_metadata.tsv')
         with open(emb_conf.metadata_path, 'w', newline='', encoding='utf-8') as csvfile:
             writer = csv.writer(csvfile, delimiter='\t')
             writer.writerow(['Word', 'Frequency'])
-            if emb == doc_emb:
+            if emb == emb_doc:
                 for doc in docs:
                     writer.writerow([' '.join(doc[1]), 1])
-            elif emb == word_emb:
+            elif emb == emb_word:
                 words = len(word_to_index) * [None]
                 for word, i in word_to_index.items():
                     words[i] = word
@@ -76,9 +73,8 @@ def save_model(name, docs, word_to_index, word_to_freq, doc_emb, word_emb, hs_va
     projector.visualize_embeddings(summary_writer, config)
 
     # save model
-    saver = tf.train.Saver([word_emb, doc_emb, *hs_vars])
+    saver = tf.train.Saver({'emb_word': emb_word, 'emb_doc': emb_doc, 'hs_W': hs_vars[0], 'hs_b': hs_vars[1]})
     saver.save(sess, os.path.join(path, 'model.ckpt'))
-    return path
 
 
 @memory.cache(ignore=['docs', 'mats', 'tree', 'word_to_index', 'word_to_freq'])
@@ -91,11 +87,11 @@ def run_pv_dm(
     # network
     X_doc = tf.placeholder(tf.int32, [None])
     X_words = tf.placeholder(tf.int32, [None, window_size - 1])
-    doc_emb = tf.Variable(tf.random_normal([len(docs), embedding_size]), name='doc_emb')
-    word_emb = tf.Variable(tf.random_normal([len(word_to_index), embedding_size]), name='word_emb')
+    emb_doc = tf.Variable(tf.random_normal([len(docs), embedding_size]))
+    emb_word = tf.Variable(tf.random_normal([len(word_to_index), embedding_size]))
     emb = tf.concat([
-        tf.reshape(tf.nn.embedding_lookup(doc_emb, X_doc), [-1, 1, embedding_size]),
-        tf.nn.embedding_lookup(word_emb, X_words)
+        tf.reshape(tf.nn.embedding_lookup(emb_doc, X_doc), [-1, 1, embedding_size]),
+        tf.nn.embedding_lookup(emb_word, X_words)
     ], 1)
     flatten = tf.reshape(emb, [-1, window_size * embedding_size])
     l = HierarchicalSoftmaxLayer(tree, word_to_index, name='hs')
@@ -110,18 +106,17 @@ def run_pv_dm(
                 grads_and_vars[i] = (ops.convert_to_tensor(grad), var)
     else:
         # only train document embeddings
-        grads_and_vars = [(grad, var) for grad, var in grads_and_vars if var == doc_emb]
+        grads_and_vars = [(grad, var) for grad, var in grads_and_vars if var == emb_doc]
     train = opt.apply_gradients(grads_and_vars)
 
     # run
-    epoch_size = 0
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
         # load trained model if we are doing inference
         if not training_:
-            saver = tf.train.import_meta_graph(os.path.join(train_model_path, 'model.ckpt.meta'))
-            saver.restore(sess, train_model_path)
+            saver = tf.train.Saver({'emb_word': emb_word, 'hs_W': hs_vars[0], 'hs_b': hs_vars[1]})
+            saver.restore(sess, os.path.join(train_model_path, 'model.ckpt'))
 
         # train
         for i in range(epoch_size):
@@ -136,7 +131,9 @@ def run_pv_dm(
                     print(datetime.datetime.now(), j, sess.run(cost, feed_dict=feed_dict))
 
         # save
-        return save_model(name, docs, word_to_index, word_to_freq, doc_emb, word_emb, hs_vars, sess)
+        path = os.path.join('__cache__', 'tf', f'{name}-{uuid.uuid4()}')
+        save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_vars, sess)
+        return path
 
 
 def main():
