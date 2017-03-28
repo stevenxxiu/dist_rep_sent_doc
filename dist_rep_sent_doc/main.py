@@ -1,3 +1,4 @@
+import csv
 import datetime
 import os
 import uuid
@@ -6,6 +7,7 @@ from collections import Counter
 import joblib
 import numpy as np
 import tensorflow as tf
+from tensorflow.contrib.tensorboard.plugins import projector
 from tensorflow.python.framework import ops
 
 from dist_rep_sent_doc.data import preprocess_data
@@ -23,7 +25,7 @@ def docs_to_mat(docs, window_size, word_to_index):
             doc.append(i)
             words.append(word_indexes[j:j + window_size - 1])
             target.append(word_indexes[j + window_size - 1])
-    return len(docs), np.array(doc), np.array(words), np.array(target)
+    return np.array(doc), np.array(words), np.array(target)
 
 
 @memory.cache
@@ -41,25 +43,56 @@ def gen_data(path, window_size):
 
     # convert data to index matrix
     return (
-        docs_to_mat(train, window_size, word_to_index),
-        docs_to_mat(val, window_size, word_to_index),
-        docs_to_mat(test, window_size, word_to_index),
-        tree, word_to_index
+        train, docs_to_mat(train, window_size, word_to_index),
+        val, docs_to_mat(val, window_size, word_to_index),
+        test, docs_to_mat(test, window_size, word_to_index),
+        tree, word_to_index, word_to_freq
     )
 
 
-@memory.cache(ignore=['data'])
+def save_model(name, docs, word_to_index, word_to_freq, doc_emb, word_emb, hs_vars, sess):
+    path = os.path.join('__cache__', 'tf', f'{name}-{uuid.uuid4()}')
+    os.makedirs(path)
+
+    # visualize embeddings
+    config = projector.ProjectorConfig()
+    for emb_name, emb in [('doc', doc_emb), ('word', word_emb)]:
+        emb_conf = config.embeddings.add()
+        emb_conf.tensor_name = emb.name
+        emb_conf.metadata_path = os.path.join(path, f'{emb_name}_metadata.tsv')
+        with open(emb_conf.metadata_path, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile, delimiter='\t')
+            writer.writerow(['Word', 'Frequency'])
+            if emb == doc_emb:
+                for doc in docs:
+                    writer.writerow([' '.join(doc[1]), 1])
+            elif emb == word_emb:
+                words = len(word_to_index) * [None]
+                for word, i in word_to_index.items():
+                    words[i] = word
+                for word in words:
+                    writer.writerow([word, word_to_freq.get(word, 0)])
+    summary_writer = tf.summary.FileWriter(path)
+    projector.visualize_embeddings(summary_writer, config)
+
+    # save model
+    saver = tf.train.Saver([word_emb, doc_emb, *hs_vars])
+    saver.save(sess, os.path.join(path, 'model.ckpt'))
+    return path
+
+
+@memory.cache(ignore=['docs', 'mats', 'tree', 'word_to_index', 'word_to_freq'])
 def run_pv_dm(
-    name, data, training_, tree, word_to_index, window_size, embedding_size, batch_size, epoch_size,
-    train_model_name=None
+    name, docs, mats, tree, word_to_index, word_to_freq, training_, window_size, embedding_size, batch_size, epoch_size,
+    train_model_path=None
 ):
-    data_n_docs, data_X_doc, data_X_words, data_y = data
+    mat_X_doc, mat_X_words, mat_y = mats
 
     # network
     X_doc = tf.placeholder(tf.int32, [None])
     X_words = tf.placeholder(tf.int32, [None, window_size - 1])
-    doc_emb = tf.Variable(tf.random_normal([data_n_docs, embedding_size]))
-    word_emb = tf.Variable(tf.random_normal([len(word_to_index), embedding_size]))
+    doc_emb = tf.Variable(tf.random_normal([len(docs), embedding_size]), name='doc_emb')
+    word_emb = tf.Variable(tf.random_normal([len(word_to_index), embedding_size]), name='word_emb')
     emb = tf.concat([
         tf.reshape(tf.nn.embedding_lookup(doc_emb, X_doc), [-1, 1, embedding_size]),
         tf.nn.embedding_lookup(word_emb, X_words)
@@ -81,42 +114,41 @@ def run_pv_dm(
     train = opt.apply_gradients(grads_and_vars)
 
     # run
+    epoch_size = 0
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
         # load trained model if we are doing inference
         if not training_:
-            saver = tf.train.import_meta_graph(f'{train_model_name}.meta')
-            saver.restore(sess, train_model_name)
+            saver = tf.train.import_meta_graph(os.path.join(train_model_path, 'model.ckpt.meta'))
+            saver.restore(sess, train_model_path)
 
         # train
         for i in range(epoch_size):
-            p = np.random.permutation(len(data_y))
-            data_X_doc, data_X_words, data_y = data_X_doc[p], data_X_words[p], data_y[p]
-            for j in range(0, len(data_y), batch_size):
+            p = np.random.permutation(len(mat_y))
+            mat_X_doc, mat_X_words, mat_y = mat_X_doc[p], mat_X_words[p], mat_y[p]
+            for j in range(0, len(mat_y), batch_size):
                 batch_X_doc, batch_X_words, batch_y = \
-                    data_X_doc[j:j + batch_size], data_X_words[j:j + batch_size], data_y[j:j + batch_size]
+                    mat_X_doc[j:j + batch_size], mat_X_words[j:j + batch_size], mat_y[j:j + batch_size]
                 feed_dict = {X_doc: batch_X_doc, X_words: batch_X_words, **l.get_hs_inputs(batch_y)}
                 sess.run(train, feed_dict=feed_dict)
                 if j % 256000 == 0:
                     print(datetime.datetime.now(), j, sess.run(cost, feed_dict=feed_dict))
 
-        # save model
-        name = os.path.join('__cache__', str(uuid.uuid4()))
-        saver = tf.train.Saver([word_emb, doc_emb, *hs_vars])
-        saver.save(sess, name)
-        return name
+        # save
+        return save_model(name, docs, word_to_index, word_to_freq, doc_emb, word_emb, hs_vars, sess)
 
 
 def main():
-    train, val, test, tree, word_to_index = gen_data('../data/stanford_sentiment_treebank/class_5', window_size=8)
-    pv_dm_train_name = run_pv_dm(
-        'train_5', train, training_=True, tree=tree, word_to_index=word_to_index, window_size=8, embedding_size=400,
-        batch_size=256, epoch_size=20
+    train_docs, train_mats, val_docs, val_mats, test_docs, test_mats, tree, word_to_index, word_to_freq = \
+        gen_data('../data/stanford_sentiment_treebank/class_5', window_size=8)
+    pv_dm_train_path = run_pv_dm(
+        'train_5', train_docs, train_mats, tree, word_to_index, word_to_freq, training_=True, window_size=8,
+        embedding_size=400, batch_size=256, epoch_size=20
     )
-    pv_dm_val_name = run_pv_dm(
-        'val_5', val, training_=False, tree=tree, word_to_index=word_to_index, window_size=8, embedding_size=400,
-        batch_size=256, epoch_size=100, train_model_name=pv_dm_train_name
+    pv_dm_val_path = run_pv_dm(
+        'val_5', val_docs, val_mats, tree, word_to_index, word_to_freq, training_=False, window_size=8,
+        embedding_size=400, batch_size=256, epoch_size=100, train_model_path=pv_dm_train_path
     )
 
 if __name__ == '__main__':
