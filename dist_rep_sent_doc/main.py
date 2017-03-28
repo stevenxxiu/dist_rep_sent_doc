@@ -77,10 +77,10 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_va
     saver.save(sess, os.path.join(path, 'model.ckpt'))
 
 
-# @memory.cache(ignore=['docs', 'mats', 'tree', 'word_to_index', 'word_to_freq'])
+@memory.cache(ignore=['docs', 'mats', 'tree', 'word_to_index', 'word_to_freq'])
 def run_pv_dm(
-    name, docs, mats, tree, word_to_index, word_to_freq, training_, window_size, embedding_size, batch_size, epoch_size,
-    train_model_path=None
+    name, docs, mats, tree, word_to_index, word_to_freq, training_, window_size, embedding_size, lr, batch_size,
+    epoch_size, train_model_path=None
 ):
     mat_X_doc, mat_X_words, mat_y = mats
 
@@ -97,7 +97,7 @@ def run_pv_dm(
     l = HierarchicalSoftmaxLayer(tree, word_to_index, name='hs')
     cost = -l.apply(flatten, training=True)
     hs_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='hs')
-    opt = tf.train.AdadeltaOptimizer(1.0)
+    opt = tf.train.AdadeltaOptimizer(lr)
     grads_and_vars = opt.compute_gradients(cost)
     if training_:
         # don't use sparse gradients in hierarchical softmax to run them on the gpu
@@ -140,14 +140,13 @@ def run_pv_dm(
 def main():
     train_docs, train_mats, val_docs, val_mats, test_docs, test_mats, tree, word_to_index, word_to_freq = \
         gen_data('../data/stanford_sentiment_treebank/class_5', window_size=8)
-    # pv_dm_train_path = run_pv_dm(
-    #     'train_5', train_docs, train_mats, tree, word_to_index, word_to_freq, training_=True, window_size=8,
-    #     embedding_size=400, batch_size=256, epoch_size=20
-    # )
-    pv_dm_train_path = '__cache__/tf/train_5-fe59921c-202e-4b71-b851-4c7f8dabd95b'
+    pv_dm_train_path = run_pv_dm(
+        'train_5', train_docs, train_mats, tree, word_to_index, word_to_freq, training_=True, window_size=8,
+        embedding_size=400, lr=10, batch_size=256, epoch_size=20
+    )
     pv_dm_val_path = run_pv_dm(
         'val_5', val_docs, val_mats, tree, word_to_index, word_to_freq, training_=False, window_size=8,
-        embedding_size=400, batch_size=256, epoch_size=100, train_model_path=pv_dm_train_path
+        embedding_size=400, lr=1000, batch_size=256, epoch_size=100, train_model_path=pv_dm_train_path
     )
 
 if __name__ == '__main__':

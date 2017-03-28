@@ -9,7 +9,7 @@ To normalize the dataset (the stanford tool does some regex replacements to fix 
 ## Unclear parts of the paper:
 The random initializations of the word embedding and softmax weights are not given.
 
-The learning rate/gradient descent method is not specified.
+The learning rate/gradient descent method is not specified. The objective is not specified, although from the previous word embeddings paragraph it is probably the average log probability. In fact for adadelta, training and inference require quite different learning rates to achieve good results.
 
 Hierarchical softmax usually has a bias, it is not described `Distributed representations of words and phrases and their compositionality` paper, but the paper does say "... softmax weights U, b and paragraph vectors D` ...", so we suppose that there is a bias.
 
