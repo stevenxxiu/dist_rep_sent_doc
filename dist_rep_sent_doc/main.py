@@ -53,7 +53,7 @@ def gen_data(path, window_size):
 def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_vars, sess):
     # visualize embeddings
     config = projector.ProjectorConfig()
-    for emb_name, emb in [('doc', emb_doc), ('word', emb_word)]:
+    for emb_name, emb in [('emb_doc', emb_doc), ('emb_word', emb_word)]:
         emb_conf = config.embeddings.add()
         emb_conf.tensor_name = emb_name
         emb_conf.metadata_path = os.path.abspath(os.path.join(path, f'{emb_name}_metadata.tsv'))
@@ -77,7 +77,7 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_va
     saver.save(sess, os.path.join(path, 'model.ckpt'))
 
 
-@memory.cache(ignore=['docs', 'mats', 'tree', 'word_to_index', 'word_to_freq'])
+# @memory.cache(ignore=['docs', 'mats', 'tree', 'word_to_index', 'word_to_freq'])
 def run_pv_dm(
     name, docs, mats, tree, word_to_index, word_to_freq, training_, window_size, embedding_size, batch_size, epoch_size,
     train_model_path=None
@@ -132,6 +132,7 @@ def run_pv_dm(
 
         # save
         path = os.path.join('__cache__', 'tf', f'{name}-{uuid.uuid4()}')
+        os.makedirs(path)
         save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_vars, sess)
         return path
 
@@ -139,10 +140,11 @@ def run_pv_dm(
 def main():
     train_docs, train_mats, val_docs, val_mats, test_docs, test_mats, tree, word_to_index, word_to_freq = \
         gen_data('../data/stanford_sentiment_treebank/class_5', window_size=8)
-    pv_dm_train_path = run_pv_dm(
-        'train_5', train_docs, train_mats, tree, word_to_index, word_to_freq, training_=True, window_size=8,
-        embedding_size=400, batch_size=256, epoch_size=20
-    )
+    # pv_dm_train_path = run_pv_dm(
+    #     'train_5', train_docs, train_mats, tree, word_to_index, word_to_freq, training_=True, window_size=8,
+    #     embedding_size=400, batch_size=256, epoch_size=20
+    # )
+    pv_dm_train_path = '__cache__/tf/train_5-fe59921c-202e-4b71-b851-4c7f8dabd95b'
     pv_dm_val_path = run_pv_dm(
         'val_5', val_docs, val_mats, tree, word_to_index, word_to_freq, training_=False, window_size=8,
         embedding_size=400, batch_size=256, epoch_size=100, train_model_path=pv_dm_train_path
