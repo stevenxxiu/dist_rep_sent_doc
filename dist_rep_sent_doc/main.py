@@ -143,24 +143,24 @@ def main():
         gen_data('../data/stanford_sentiment_treebank/class_5', window_size=8)
 
     # pv dm
-    pv_dm_train_path = run_pv_dm(
-        'train_5', train_docs, train_mats, tree, word_to_index, word_to_freq, training_=True, window_size=8,
-        embedding_size=400, lr=10, batch_size=256, epoch_size=20
+    docs = train_docs + val_docs
+    mats = (
+        np.concatenate([train_mats[0], len(train_docs) + val_mats[0]]),
+        np.vstack([train_mats[1], val_mats[1]]),
+        np.concatenate([train_mats[2], val_mats[2]])
     )
-    pv_dm_val_path = run_pv_dm(
-        'val_5', val_docs, val_mats, tree, word_to_index, word_to_freq, training_=False, window_size=8,
-        embedding_size=400, lr=1000, batch_size=256, epoch_size=100, train_model_path=pv_dm_train_path
+    pv_dm_train_path = run_pv_dm(
+        'train_val_5', docs, mats, tree, word_to_index, word_to_freq, training_=True,
+        window_size=8, embedding_size=400, lr=10, batch_size=256, epoch_size=20
     )
 
     # log reg
     with tf.Session() as sess:
-        pv_dm_train = tf.Variable(tf.zeros([len(train_docs), 400]))
-        pv_dm_val = tf.Variable(tf.zeros([len(val_docs), 400]))
-        tf.train.Saver({'emb_doc': pv_dm_train}).restore(sess, os.path.join(pv_dm_train_path, 'model.ckpt'))
-        tf.train.Saver({'emb_doc': pv_dm_val}).restore(sess, os.path.join(pv_dm_val_path, 'model.ckpt'))
+        pv_dm_all = tf.Variable(tf.zeros([len(train_docs) + len(val_docs), 400]))
+        tf.train.Saver({'emb_doc': pv_dm_all}).restore(sess, os.path.join(pv_dm_train_path, 'model.ckpt'))
         logreg = LogisticRegression()
-        logreg.fit(pv_dm_train.eval(sess), [doc[0] for doc in train_docs])
-        print(logreg.score(pv_dm_val.eval(sess), [doc[0] for doc in val_docs]))
+        logreg.fit(pv_dm_all.eval(sess)[:len(train_docs)], [doc[0] for doc in train_docs])
+        print(logreg.score(pv_dm_all.eval(sess)[len(train_docs):], [doc[0] for doc in val_docs]))
 
 
 if __name__ == '__main__':
