@@ -39,12 +39,12 @@ class HierarchicalSoftmaxLayer(base._Layer):
     def build(self, input_shape):
         input_shape = tensor_shape.TensorShape(input_shape)
         self.W = vs.get_variable(
-            'W', shape=[len(self.node_id_to_index), input_shape[-1].value],
-            initializer=self.W_initializer, dtype=self.dtype
+            'W', shape=[len(self.node_id_to_index) - 1, input_shape[-1].value],
+            initializer=self.W_initializer
         )
         self.b = vs.get_variable(
-            'b', shape=[len(self.node_id_to_index)],
-            initializer=self.b_initializer, dtype=self.dtype
+            'b', shape=[len(self.node_id_to_index) - 1],
+            initializer=self.b_initializer
         )
 
     def call(self, inputs, training=False):
