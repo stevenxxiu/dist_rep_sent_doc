@@ -178,7 +178,7 @@ def main():
     # pv dm
     pv_dm_train_path = run_pv_dm(
         'train_5', train_docs, train_mats, tree, word_to_index, word_to_freq, training_=True, window_size=8,
-        embedding_size=400, lr=10, batch_size=256, epoch_size=20
+        embedding_size=400, lr=10, batch_size=256, epoch_size=5
     )
     pv_dm_val_path = run_pv_dm(
         'val_5', val_docs, val_mats, tree, word_to_index, word_to_freq, training_=False, window_size=8,

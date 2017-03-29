@@ -55,6 +55,7 @@ def preprocess_data(path):
     train_phrases = []
     for tree in train_trees:
         get_phrases(tree, train_phrases)
+    train_phrases = set((label, tuple(doc)) for label, doc in train_phrases)
     val_sents, test_sents = [], []
     for trees, res in zip([val_trees, test_trees], [val_sents, test_sents]):
         for tree in trees:
