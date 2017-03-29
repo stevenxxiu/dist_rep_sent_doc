@@ -7,9 +7,9 @@ from collections import Counter
 import joblib
 import numpy as np
 import tensorflow as tf
-from sklearn.linear_model import LogisticRegression
 from tensorflow.contrib.tensorboard.plugins import projector
 from tensorflow.python.framework import ops
+from tensorflow.python.ops import init_ops
 
 from dist_rep_sent_doc.data import preprocess_data
 from dist_rep_sent_doc.huffman import build_huffman
@@ -97,10 +97,10 @@ def run_pv_dm(
     ], 1)
     flatten = tf.reshape(emb, [-1, window_size * embedding_size])
     l = HierarchicalSoftmaxLayer(tree, word_to_index, name='hs')
-    cost = -l.apply(flatten, training=True)
+    loss = -l.apply(flatten, training=True)
     hs_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='hs')
     opt = tf.train.AdadeltaOptimizer(lr)
-    grads_and_vars = opt.compute_gradients(cost)
+    grads_and_vars = opt.compute_gradients(loss)
     if training_:
         # don't use sparse gradients in hierarchical softmax to run them on the gpu
         for i, (grad, var) in enumerate(grads_and_vars):
@@ -123,20 +123,52 @@ def run_pv_dm(
         # train
         for i in range(epoch_size):
             p = np.random.permutation(len(mat_y))
-            mat_X_doc, mat_X_words, mat_y = mat_X_doc[p], mat_X_words[p], mat_y[p]
+            mat_X_doc_, mat_X_words_, mat_y_ = mat_X_doc[p], mat_X_words[p], mat_y[p]
             for j in range(0, len(mat_y), batch_size):
                 batch_X_doc, batch_X_words, batch_y = \
-                    mat_X_doc[j:j + batch_size], mat_X_words[j:j + batch_size], mat_y[j:j + batch_size]
+                    mat_X_doc_[j:j + batch_size], mat_X_words_[j:j + batch_size], mat_y_[j:j + batch_size]
                 feed_dict = {X_doc: batch_X_doc, X_words: batch_X_words, **l.get_hs_inputs(batch_y)}
                 sess.run(train, feed_dict=feed_dict)
                 if j % 256000 == 0:
-                    print(datetime.datetime.now(), j, sess.run(cost, feed_dict=feed_dict))
+                    print(datetime.datetime.now(), j, sess.run(loss, feed_dict=feed_dict))
 
         # save
         path = os.path.join('__cache__', 'tf', f'{name}-{uuid.uuid4()}')
         os.makedirs(path)
         save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_vars, sess)
         return path
+
+
+def run_log_reg(train_docs, val_docs, pv_dm_train_path, pv_dm_val_path, embedding_size, batch_size, epoch_size):
+    X = tf.placeholder(tf.float32, [None, embedding_size])
+    y = tf.placeholder(tf.int32, [None])
+    dense = tf.layers.dense(X, 5, kernel_initializer=init_ops.glorot_uniform_initializer())
+    pred = tf.argmax(dense, 1)
+    loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=dense, labels=y))
+    train = tf.train.AdadeltaOptimizer(1).minimize(loss)
+
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+
+        pv_dm_train = tf.Variable(tf.zeros([len(train_docs), embedding_size]))
+        pv_dm_val = tf.Variable(tf.zeros([len(val_docs), embedding_size]))
+        tf.train.Saver({'emb_doc': pv_dm_train}).restore(sess, os.path.join(pv_dm_train_path, 'model.ckpt'))
+        tf.train.Saver({'emb_doc': pv_dm_val}).restore(sess, os.path.join(pv_dm_val_path, 'model.ckpt'))
+
+        train_X = pv_dm_train.eval(sess)
+        train_y = np.array([doc[0] for doc in train_docs])
+        for i in range(epoch_size):
+            p = np.random.permutation(len(train_y))
+            train_X_, train_y_ = train_X[p], train_y[p]
+            for j in range(0, len(train_y), batch_size):
+                batch_X, batch_y = train_X_[j:j + batch_size], train_y_[j:j + batch_size]
+                feed_dict = {X: batch_X, y: batch_y}
+                sess.run(train, feed_dict={X: batch_X, y: batch_y})
+                if j == 0:
+                    print(datetime.datetime.now(), j, sess.run(loss, feed_dict=feed_dict))
+
+        print(Counter(sess.run(pred, {X: train_X})))
+        # print(sess.run(pred, {X: pv_dm_val}))
 
 
 def main():
@@ -154,14 +186,9 @@ def main():
     )
 
     # log reg
-    with tf.Session() as sess:
-        pv_dm_train = tf.Variable(tf.zeros([len(train_docs), 400]))
-        pv_dm_val = tf.Variable(tf.zeros([len(val_docs), 400]))
-        tf.train.Saver({'emb_doc': pv_dm_train}).restore(sess, os.path.join(pv_dm_train_path, 'model.ckpt'))
-        tf.train.Saver({'emb_doc': pv_dm_val}).restore(sess, os.path.join(pv_dm_val_path, 'model.ckpt'))
-        logreg = LogisticRegression()
-        logreg.fit(pv_dm_train.eval(sess), [doc[0] for doc in train_docs])
-        print(logreg.score(pv_dm_val.eval(sess), [doc[0] for doc in val_docs]))
+    run_log_reg(
+        train_docs, val_docs, pv_dm_train_path, pv_dm_val_path, embedding_size=400, batch_size=256, epoch_size=5
+    )
 
 
 if __name__ == '__main__':
