@@ -1,6 +1,7 @@
 import unittest
 from collections import namedtuple
 
+import numpy as np
 from numpy.testing import assert_array_almost_equal
 from scipy.special import expit
 
@@ -36,8 +37,8 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
         X = tf.placeholder(tf.float32, [None, 2])
         l = HierarchicalSoftmaxLayer(
             self.tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4},
-            W_initializer=tf.constant_initializer([[.01, .02], [.03, .04], [.05, .06], [.07, .08], [.09, .10]]),
-            b_initializer=tf.constant_initializer(np.array([.11, .12, .13, .14, .15]))
+            W_initializer=tf.constant_initializer([[.01, .02], [.03, .04], [.05, .06], [.07, .08]]),
+            b_initializer=tf.constant_initializer(np.array([.11, .12, .13, .14]))
         )
         cost = l.apply(X, training=True)
         with tf.Session() as sess:
@@ -61,15 +62,15 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
         X = tf.placeholder(tf.float32, [None, 2])
         l = HierarchicalSoftmaxLayer(
             self.tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4},
-            W_initializer=tf.constant_initializer([[.01, .02], [.03, .04], [.05, .06], [.07, .08], [.09, .10]]),
-            b_initializer=tf.constant_initializer(np.array([.11, .12, .13, .14, .15]))
+            W_initializer=tf.constant_initializer([[.01, .02], [.03, .04], [.05, .06], [.07, .08]]),
+            b_initializer=tf.constant_initializer(np.array([.11, .12, .13, .14]))
         )
         probs = l.apply(X, training=False)
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
-            res = l.get_hs_outputs(sess.run(probs, feed_dict={
+            res = sess.run(probs, feed_dict={
                 X: np.array([[.16, .17], [.18, .19], [.20, .21]]),
-            }))
+            })
             assert_array_almost_equal(res[0][:2], np.array([
                 np.log(1 - expit(np.dot([.16, .17], [.01, .02]) + 0.11)), (
                     np.log(expit(np.dot([.16, .17], [.01, .02]) + 0.11)) +
