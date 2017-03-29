@@ -40,6 +40,7 @@ def gen_data(path, window_size):
     for word, count in word_to_freq.items():
         if count >= vocab_min_freq:
             word_to_index[word] = len(word_to_index)
+    word_to_freq['<null>'] = word_to_freq['<unk>'] = 0
     tree = build_huffman(word_to_freq)
 
     # convert data to index matrix
@@ -69,7 +70,7 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_va
                 for word, i in word_to_index.items():
                     words[i] = word
                 for word in words:
-                    writer.writerow([word, word_to_freq.get(word, 0)])
+                    writer.writerow([word, word_to_freq[word]])
     summary_writer = tf.summary.FileWriter(path)
     projector.visualize_embeddings(summary_writer, config)
 
