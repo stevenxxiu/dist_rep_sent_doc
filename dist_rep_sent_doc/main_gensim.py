@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 from collections import Counter
 
 import joblib
@@ -25,8 +26,16 @@ def main():
     # fit
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     train_X, train_y, val_X, val_y, test_X, test_y = gen_data('../data/stanford_sentiment_treebank/class_5')
-    model = Doc2Vec(train_X + val_X + test_X, size=400, window=8, min_count=0, workers=4, dm=1, dm_concat=1, hs=1)
-    model.train(train_X)
+    model = Doc2Vec(
+        size=400, window=8, min_count=0, workers=4, dm=1, dm_concat=1, hs=1, iter=1, alpha=0.025, min_alpha=0.025
+    )
+    model.build_vocab(train_X + val_X + test_X)
+
+    for epoch in range(10):
+        random.shuffle(train_X)
+        model.train(train_X)
+        model.alpha -= 0.002
+        model.min_alpha = model.alpha
 
     # save
     os.makedirs('__cache__/gensim', exist_ok=True)
