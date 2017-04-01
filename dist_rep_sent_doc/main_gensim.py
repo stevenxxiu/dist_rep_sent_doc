@@ -9,7 +9,7 @@ from gensim.models import Doc2Vec
 from gensim.models.doc2vec import TaggedDocument
 from sklearn.linear_model import LogisticRegression
 
-from dist_rep_sent_doc.data import preprocess_data
+from dist_rep_sent_doc.data import sstb
 
 memory = joblib.Memory('__cache__', verbose=0)
 
@@ -19,7 +19,7 @@ def gen_data(path):
     return sum([[
         [TaggedDocument(doc[1], [i]) for i, doc in enumerate(docs)],
         [doc[0] for doc in docs]
-    ] for docs in preprocess_data(path)], [])
+    ] for docs in sstb.load_data(path)], [])
 
 
 def main():

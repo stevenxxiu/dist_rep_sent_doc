@@ -11,7 +11,7 @@ from tensorflow.contrib.tensorboard.plugins import projector
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import init_ops
 
-from dist_rep_sent_doc.data import preprocess_data
+from dist_rep_sent_doc.data import sstb
 from dist_rep_sent_doc.huffman import build_huffman
 from dist_rep_sent_doc.layers import HierarchicalSoftmaxLayer
 
@@ -31,7 +31,7 @@ def docs_to_mat(docs, window_size, word_to_index):
 
 @memory.cache
 def gen_data(path, window_size):
-    train, val, test = preprocess_data(path)
+    train, val, test = sstb.load_data(path)
 
     # get huffman tree
     word_to_freq = Counter(word for docs in (train, val, test) for doc in docs for word in doc[1])

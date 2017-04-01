@@ -2,6 +2,8 @@ import os
 import re
 from collections import namedtuple
 
+__all__ = ['load_data']
+
 ParsedNode = namedtuple('ParsedNode', ['label', 'word', 'children'])
 label_re = re.compile(r'\d+')
 word_re = re.compile(r'[^)]+')
@@ -45,7 +47,7 @@ def get_phrases(tree, accum=None):
     return res
 
 
-def preprocess_data(path):
+def load_data(path):
     # return train phrases, val sentences, test sentences
     train_trees, val_trees, test_trees = [], [], []
     for filename, res in zip(['train.txt', 'dev.txt', 'test.txt'], [train_trees, val_trees, test_trees]):
