@@ -26,5 +26,26 @@ def normalize_data():
                 sr.write(doc)
                 sr.write('\n')
 
+
+def load_data(path):
+    train_sents, val_sents, test_sents = [], [], []
+    with open(os.path.join(path, 'train_neg.txt'), encoding='utf-8') as sr:
+        for line in sr:
+            train_sents.append((0, line.split()))
+    with open(os.path.join(path, 'train_pos.txt'), encoding='utf-8') as sr:
+        for line in sr:
+            train_sents.append((1, line.split()))
+    with open(os.path.join(path, 'train_unsup.txt'), encoding='utf-8') as sr:
+        for line in sr:
+            train_sents.append((None, line.split()))
+    with open(os.path.join(path, 'test_neg.txt'), encoding='utf-8') as sr:
+        for line in sr:
+            test_sents.append((0, line.split()))
+    with open(os.path.join(path, 'test_pos.txt'), encoding='utf-8') as sr:
+        for line in sr:
+            test_sents.append((1, line.split()))
+    return train_sents, val_sents, test_sents
+
+
 if __name__ == '__main__':
     normalize_data()

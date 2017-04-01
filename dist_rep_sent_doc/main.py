@@ -11,7 +11,7 @@ from tensorflow.contrib.tensorboard.plugins import projector
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import init_ops
 
-from dist_rep_sent_doc.data import sstb
+from dist_rep_sent_doc.data import sstb, imdb
 from dist_rep_sent_doc.huffman import build_huffman
 from dist_rep_sent_doc.layers import HierarchicalSoftmaxLayer
 
@@ -21,7 +21,8 @@ memory = joblib.Memory('__cache__', verbose=0)
 def docs_to_mat(docs, window_size, word_to_index):
     doc, words, target = [], [], []
     for i, doc_ in enumerate(docs):
-        word_indexes = (window_size - 1) * [word_to_index['<null>']] + [word_to_index[word] for word in doc_[1]]
+        word_indexes = (window_size - 1) * [word_to_index['<null>']] + \
+            [word_to_index.get(word, word_to_index['<unk>']) for word in doc_[1]]
         for j in range(len(doc_[1])):
             doc.append(i)
             words.append(word_indexes[j:j + window_size - 1])
@@ -30,17 +31,23 @@ def docs_to_mat(docs, window_size, word_to_index):
 
 
 @memory.cache
-def gen_data(path, window_size):
-    train, val, test = sstb.load_data(path)
+def gen_data(name, window_size, vocab_min_freq):
+    train = val = test = []
+    if name == 'sstb_2':
+        train, val, test = sstb.load_data('../data/stanford_sentiment_treebank/class_2')
+    elif name == 'sstb_5':
+        train, val, test = sstb.load_data('../data/stanford_sentiment_treebank/class_5')
+    elif name == 'imdb':
+        train, val, test = imdb.load_data('../data/imdb_sentiment')
 
     # get huffman tree
-    word_to_freq = Counter(word for docs in (train, val, test) for doc in docs for word in doc[1])
-    vocab_min_freq = 0
-    word_to_index = {'<null>': 0, '<unk>': 1}
-    for word, count in word_to_freq.items():
+    word_to_freq = {'<null>': 0, '<unk>': 0}
+    for word, count in Counter(word for docs in (train, val, test) for doc in docs for word in doc[1]).items():
         if count >= vocab_min_freq:
-            word_to_index[word] = len(word_to_index)
-    word_to_freq['<null>'] = word_to_freq['<unk>'] = 0
+            word_to_freq[word] = count
+        else:
+            word_to_freq['<unk>'] += 1
+    word_to_index = {word: i for i, word in enumerate(word_to_freq)}
     tree = build_huffman(word_to_freq)
 
     # convert data to index matrix
@@ -139,7 +146,7 @@ def run_pv_dm(
         return path
 
 
-def run_log_reg(train_docs, val_docs, pv_dm_train_path, pv_dm_val_path, embedding_size, batch_size, epoch_size):
+def run_log_reg(train_docs, test_docs, pv_dm_train_path, pv_dm_test_path, embedding_size, batch_size, epoch_size):
     X = tf.placeholder(tf.float32, [None, embedding_size])
     y = tf.placeholder(tf.int32, [None])
     dense = tf.layers.dense(X, 5, kernel_initializer=init_ops.glorot_uniform_initializer())
@@ -151,9 +158,9 @@ def run_log_reg(train_docs, val_docs, pv_dm_train_path, pv_dm_val_path, embeddin
         sess.run(tf.global_variables_initializer())
 
         pv_dm_train = tf.Variable(tf.zeros([len(train_docs), embedding_size]))
-        pv_dm_val = tf.Variable(tf.zeros([len(val_docs), embedding_size]))
+        pv_dm_test = tf.Variable(tf.zeros([len(test_docs), embedding_size]))
         tf.train.Saver({'emb_doc': pv_dm_train}).restore(sess, os.path.join(pv_dm_train_path, 'model.ckpt'))
-        tf.train.Saver({'emb_doc': pv_dm_val}).restore(sess, os.path.join(pv_dm_val_path, 'model.ckpt'))
+        tf.train.Saver({'emb_doc': pv_dm_test}).restore(sess, os.path.join(pv_dm_test_path, 'model.ckpt'))
 
         train_X = pv_dm_train.eval(sess)
         train_y = np.array([doc[0] for doc in train_docs])
@@ -168,26 +175,30 @@ def run_log_reg(train_docs, val_docs, pv_dm_train_path, pv_dm_val_path, embeddin
                     print(datetime.datetime.now(), j, sess.run(loss, feed_dict=feed_dict))
 
         print(Counter(sess.run(pred, {X: train_X})))
-        # print(sess.run(pred, {X: pv_dm_val}))
+        # print(sess.run(pred, {X: pv_dm_test}))
 
 
 def main():
+    # data_args = {'name': 'sstb_2', 'window_size': 8, 'vocab_min_freq': 0}
+    # data_args = {'name': 'sstb_5', 'window_size': 8, 'vocab_min_freq': 0}
+    data_args = {'name': 'imdb', 'window_size': 10, 'vocab_min_freq': 2}
     train_docs, train_mats, val_docs, val_mats, test_docs, test_mats, tree, word_to_index, word_to_freq = \
-        gen_data('../data/stanford_sentiment_treebank/class_5', window_size=8)
+        gen_data(**data_args)
 
     # pv dm
     pv_dm_train_path = run_pv_dm(
-        'train_5', train_docs, train_mats, tree, word_to_index, word_to_freq, training_=True, window_size=8,
-        embedding_size=400, lr=10, batch_size=256, epoch_size=5
+        f'{data_args["name"]}_train', train_docs, train_mats, tree, word_to_index, word_to_freq, training_=True,
+        window_size=data_args['window_size'], embedding_size=400, lr=10, batch_size=256, epoch_size=5
     )
-    pv_dm_val_path = run_pv_dm(
-        'val_5', val_docs, val_mats, tree, word_to_index, word_to_freq, training_=False, window_size=8,
-        embedding_size=400, lr=1000, batch_size=256, epoch_size=100, train_model_path=pv_dm_train_path
+    pv_dm_test_path = run_pv_dm(
+        f'{data_args["name"]}_val', val_docs, val_mats, tree, word_to_index, word_to_freq, training_=False,
+        window_size=data_args['window_size'], embedding_size=400, lr=1000, batch_size=256, epoch_size=100,
+        train_model_path=pv_dm_train_path
     )
 
     # log reg
     run_log_reg(
-        train_docs, val_docs, pv_dm_train_path, pv_dm_val_path, embedding_size=400, batch_size=256, epoch_size=5
+        train_docs, val_docs, pv_dm_train_path, pv_dm_test_path, embedding_size=400, batch_size=256, epoch_size=5
     )
 
 
