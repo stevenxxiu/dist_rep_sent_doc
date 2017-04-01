@@ -2,6 +2,7 @@ import unittest
 from collections import namedtuple
 
 import numpy as np
+import tensorflow as tf
 from numpy.testing import assert_array_almost_equal
 from scipy.special import expit
 
@@ -35,16 +36,18 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
 
     def test_call_training(self):
         X = tf.placeholder(tf.float32, [None, 2])
+        y = tf.placeholder(tf.int32, [None])
         l = HierarchicalSoftmaxLayer(
             self.tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4},
             W_initializer=tf.constant_initializer([[.01, .02], [.03, .04], [.05, .06], [.07, .08]]),
             b_initializer=tf.constant_initializer(np.array([.11, .12, .13, .14]))
         )
-        cost = l.apply(X, training=True)
+        cost = l.apply([X, y], training=True)
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             res = sess.run(cost, feed_dict={
-                X: np.array([[.16, .17], [.18, .19], [.20, .21]]), **l.get_hs_inputs([2, 1, 0])
+                X: np.array([[.16, .17], [.18, .19], [.20, .21]]),
+                y: [2, 1, 0],
             })
             assert_array_almost_equal(res, np.array([
                 (

@@ -1,6 +1,7 @@
 import csv
 import datetime
 import os
+import threading
 import uuid
 from collections import Counter
 
@@ -8,55 +9,38 @@ import joblib
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.tensorboard.plugins import projector
-from tensorflow.python.framework import ops
 from tensorflow.python.ops import init_ops
 
-from dist_rep_sent_doc.data import sstb, imdb
+from dist_rep_sent_doc.data import imdb, sstb
 from dist_rep_sent_doc.huffman import build_huffman
 from dist_rep_sent_doc.layers import HierarchicalSoftmaxLayer
 
 memory = joblib.Memory('__cache__', verbose=0)
 
 
-def docs_to_mat(docs, window_size, word_to_index):
-    doc, words, target = [], [], []
-    for i, doc_ in enumerate(docs):
-        word_indexes = (window_size - 1) * [word_to_index['<null>']] + \
-            [word_to_index.get(word, word_to_index['<unk>']) for word in doc_[1]]
-        for j in range(len(doc_[1])):
-            doc.append(i)
-            words.append(word_indexes[j:j + window_size - 1])
-            target.append(word_indexes[j + window_size - 1])
-    return np.array(doc), np.array(words), np.array(target)
+@memory.cache(ignore=['docsets'])
+def gen_tables(name, docsets, vocab_min_freq, sample):
+    total_count = 0
 
-
-@memory.cache
-def gen_data(name, window_size, vocab_min_freq):
-    train = val = test = []
-    if name == 'sstb_2':
-        train, val, test = sstb.load_data('../data/stanford_sentiment_treebank/class_2')
-    elif name == 'sstb_5':
-        train, val, test = sstb.load_data('../data/stanford_sentiment_treebank/class_5')
-    elif name == 'imdb':
-        train, val, test = imdb.load_data('../data/imdb_sentiment')
-
-    # get huffman tree
-    word_to_freq = {'<null>': 0, '<unk>': 0}
-    for word, count in Counter(word for docs in (train, val, test) for doc in docs for word in doc[1]).items():
+    # map word to counts and indexes, infrequent words are removed entirely
+    word_to_freq = {'<null>': 0}
+    for word, count in Counter(word for docs in docsets for doc in docs for word in doc[1]).items():
         if count >= vocab_min_freq:
             word_to_freq[word] = count
-        else:
-            word_to_freq['<unk>'] += 1
+            total_count += count
     word_to_index = {word: i for i, word in enumerate(word_to_freq)}
+
+    # get huffman tree
     tree = build_huffman(word_to_freq)
 
-    # convert data to index matrix
-    return (
-        train, docs_to_mat(train, window_size, word_to_index),
-        val, docs_to_mat(val, window_size, word_to_index),
-        test, docs_to_mat(test, window_size, word_to_index),
-        tree, word_to_index, word_to_freq
-    )
+    # get word sub-sampling probabilities
+    word_to_prob = {}
+    for word, count in word_to_freq.items():
+        # gensim modification, add ratio after square rooting it
+        ratio = sample / (count / total_count) if count > 0 else 1
+        word_to_prob[word] = min(np.sqrt(ratio) + ratio, 1)
+
+    return word_to_freq, word_to_index, tree, word_to_prob
 
 
 def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_vars, sess):
@@ -86,16 +70,42 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_va
     saver.save(sess, os.path.join(path, 'model.ckpt'))
 
 
-@memory.cache(ignore=['docs', 'mats', 'tree', 'word_to_index', 'word_to_freq'])
-def run_pv_dm(
-    name, docs, mats, tree, word_to_index, word_to_freq, training_, window_size, embedding_size, lr, batch_size,
-    epoch_size, train_model_path=None
+def load_and_enqueue(
+    docs, word_to_prob, word_to_index, window_size, epoch_size, sess, queue, X_doc_input, X_words_input, y_input, data
 ):
-    mat_X_doc, mat_X_words, mat_y = mats
+    # includes all epochs to work around https://github.com/tensorflow/tensorflow/issues/4535
+    enqueue_many = queue.enqueue_many([X_doc_input, X_words_input, y_input])
+    for i in range(epoch_size):
+        data['cur_epoch'] = i
+        p = np.random.permutation(len(docs))
+        for j in p:
+            # remove infrequent words & sample frequent words
+            X_doc, X_words, y = [], [], []
+            doc = [word for word in docs[j][1] if word in word_to_index and np.random.random() < word_to_prob[word]]
+            for k, word in enumerate(doc):
+                window = doc[k - window_size + 1:k]
+                window = ['<null>'] * (window_size - len(window) - 1) + window
+                X_doc.append(j)
+                X_words.append([word_to_index[word_] for word_ in window])
+                y.append(word_to_index[word])
+            sess.run(enqueue_many, feed_dict={X_doc_input: X_doc, X_words_input: X_words, y_input: y})
+
+
+@memory.cache(ignore=['docs', 'word_to_freq', 'word_to_index', 'tree', 'word_to_prob'])
+def run_pv_dm(
+    name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, window_size, embedding_size, cur_lr,
+    batch_size, epoch_size, train_model_path=None
+):
+    # queue
+    X_doc_input = tf.placeholder(tf.int32, [None])
+    X_words_input = tf.placeholder(tf.int32, [None, window_size - 1])
+    y_input = tf.placeholder(tf.int32, [None])
+    vars_ = [X_doc_input, X_words_input, y_input]
+    queue = tf.FIFOQueue(2 * batch_size, [var.dtype for var in vars_], shapes=[var.shape[1:] for var in vars_])
 
     # network
-    X_doc = tf.placeholder(tf.int32, [None])
-    X_words = tf.placeholder(tf.int32, [None, window_size - 1])
+    X_doc, X_words, y = queue.dequeue_up_to(batch_size)
+    lr = tf.placeholder(tf.float32, [])
     emb_doc = tf.Variable(tf.random_normal([len(docs), embedding_size]))
     emb_word = tf.Variable(tf.random_normal([len(word_to_index), embedding_size]))
     emb = tf.concat([
@@ -104,19 +114,14 @@ def run_pv_dm(
     ], 1)
     flatten = tf.reshape(emb, [-1, window_size * embedding_size])
     l = HierarchicalSoftmaxLayer(tree, word_to_index, name='hs')
-    loss = -l.apply(flatten, training=True)
+    loss = -l.apply([flatten, y], training=True)
     hs_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='hs')
-    opt = tf.train.AdadeltaOptimizer(lr)
+    opt = tf.train.GradientDescentOptimizer(lr)
     grads_and_vars = opt.compute_gradients(loss)
-    if training_:
-        # don't use sparse gradients in hierarchical softmax to run them on the gpu
-        for i, (grad, var) in enumerate(grads_and_vars):
-            if var in hs_vars:
-                grads_and_vars[i] = (ops.convert_to_tensor(grad), var)
-    else:
+    if not training_:
         # only train document embeddings
         grads_and_vars = [(grad, var) for grad, var in grads_and_vars if var == emb_doc]
-    train = opt.apply_gradients(grads_and_vars)
+    train_op = opt.apply_gradients(grads_and_vars)
 
     # run
     with tf.Session() as sess:
@@ -128,16 +133,22 @@ def run_pv_dm(
             saver.restore(sess, os.path.join(train_model_path, 'model.ckpt'))
 
         # train
-        for i in range(epoch_size):
-            p = np.random.permutation(len(mat_y))
-            mat_X_doc_, mat_X_words_, mat_y_ = mat_X_doc[p], mat_X_words[p], mat_y[p]
-            for j in range(0, len(mat_y), batch_size):
-                batch_X_doc, batch_X_words, batch_y = \
-                    mat_X_doc_[j:j + batch_size], mat_X_words_[j:j + batch_size], mat_y_[j:j + batch_size]
-                feed_dict = {X_doc: batch_X_doc, X_words: batch_X_words, **l.get_hs_inputs(batch_y)}
-                sess.run(train, feed_dict=feed_dict)
-                if j % 256000 == 0:
-                    print(datetime.datetime.now(), j, sess.run(loss, feed_dict=feed_dict))
+        lr_delta = (cur_lr - 0.001) / len(docs)
+        cur_epoch = 0
+        data = {'cur_epoch': cur_epoch}
+        threading.Thread(target=load_and_enqueue, args=(
+            docs, word_to_prob, word_to_index, window_size, epoch_size,
+            sess, queue, X_doc_input, X_words_input, y_input, data
+        )).start()
+        print(datetime.datetime.now(), 'started training')
+        while True:
+            sess.run(train_op, feed_dict={lr: cur_lr})
+            if data['cur_epoch'] != cur_epoch:
+                print(datetime.datetime.now(), f'finished epoch {cur_epoch}')
+                if cur_epoch == epoch_size:
+                    break
+                cur_epoch = data['cur_epoch']
+                cur_lr -= lr_delta
 
         # save
         path = os.path.join('__cache__', 'tf', f'{name}-{uuid.uuid4()}')
@@ -169,37 +180,56 @@ def run_log_reg(train_docs, test_docs, pv_dm_train_path, pv_dm_test_path, embedd
             train_X_, train_y_ = train_X[p], train_y[p]
             for j in range(0, len(train_y), batch_size):
                 batch_X, batch_y = train_X_[j:j + batch_size], train_y_[j:j + batch_size]
-                feed_dict = {X: batch_X, y: batch_y}
                 sess.run(train, feed_dict={X: batch_X, y: batch_y})
-                if j == 0:
-                    print(datetime.datetime.now(), j, sess.run(loss, feed_dict=feed_dict))
 
         print(Counter(sess.run(pred, {X: train_X})))
         # print(sess.run(pred, {X: pv_dm_test}))
 
 
 def main():
-    # data_args = {'name': 'sstb_2', 'window_size': 8, 'vocab_min_freq': 0}
-    # data_args = {'name': 'sstb_5', 'window_size': 8, 'vocab_min_freq': 0}
-    data_args = {'name': 'imdb', 'window_size': 10, 'vocab_min_freq': 2}
-    train_docs, train_mats, val_docs, val_mats, test_docs, test_mats, tree, word_to_index, word_to_freq = \
-        gen_data(**data_args)
+    name = 'imdb'
+    if name == 'imdb':
+        train, val, test = imdb.load_data('../data/imdb_sentiment')
+        tables = gen_tables(name, [train, val, test], 2, 1e-3)
 
-    # pv dm
-    pv_dm_train_path = run_pv_dm(
-        f'{data_args["name"]}_train', train_docs, train_mats, tree, word_to_index, word_to_freq, training_=True,
-        window_size=data_args['window_size'], embedding_size=400, lr=10, batch_size=256, epoch_size=5
-    )
-    pv_dm_test_path = run_pv_dm(
-        f'{data_args["name"]}_val', val_docs, val_mats, tree, word_to_index, word_to_freq, training_=False,
-        window_size=data_args['window_size'], embedding_size=400, lr=1000, batch_size=256, epoch_size=100,
-        train_model_path=pv_dm_train_path
-    )
+        # pv dm
+        pv_dm_train_path = run_pv_dm(
+            f'{name}_train', train, *tables, training_=True,
+            window_size=10, embedding_size=100, cur_lr=0.025, batch_size=2048, epoch_size=20
+        )
+        pv_dm_test_path = run_pv_dm(
+            f'{name}_val', test, *tables, training_=False,
+            window_size=10, embedding_size=100, cur_lr=0.025, batch_size=2048, epoch_size=20,
+            train_model_path=pv_dm_train_path
+        )
 
-    # log reg
-    run_log_reg(
-        train_docs, val_docs, pv_dm_train_path, pv_dm_test_path, embedding_size=400, batch_size=256, epoch_size=5
-    )
+        # log reg
+        run_log_reg(
+            train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=100, batch_size=256, epoch_size=5
+        )
+
+    elif name in ('sstb_2', 'sstb_5'):
+        train, val, test = sstb.load_data(
+            '../data/stanford_sentiment_treebank/class_2' if name == 'sstb_2' else
+            '../data/stanford_sentiment_treebank/class_5'
+        )
+        tables = gen_tables(name, [train, val, test], 2, 1e-5)
+
+        # pv dm
+        pv_dm_train_path = run_pv_dm(
+            f'{name}_train', train, *tables, training_=True,
+            window_size=8, embedding_size=400, cur_lr=0.025, batch_size=256, epoch_size=5
+        )
+        pv_dm_test_path = run_pv_dm(
+            f'{name}_val', test, *tables, training_=False,
+            window_size=8, embedding_size=400, cur_lr=0.025, batch_size=256, epoch_size=100,
+            train_model_path=pv_dm_train_path
+        )
+
+        # log reg
+        run_log_reg(
+            train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=400, batch_size=256, epoch_size=5
+        )
 
 
 if __name__ == '__main__':

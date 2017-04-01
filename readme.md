@@ -20,6 +20,11 @@ It is not described what process of fitting the logistic regression is used, we 
 ### Can be missed
 A detailed explanation to window size is in the Experimental Protocols section.
 
+### Gensim differences
+- Option to remove infrequent words entirely.
+- Frequent word subsampling different.
+- Reduced window sampling for the pv-dm average model, which is not present in the paper.
+
 ## Code
 See whether using theano boolean masks are faster or multiplies by the mask are faster.
 
