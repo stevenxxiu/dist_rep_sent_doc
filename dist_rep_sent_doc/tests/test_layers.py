@@ -27,11 +27,11 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
     def test_get_node_to_path(self):
         l = HierarchicalSoftmaxLayer(self.tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4})
         self.assertEqual(l._get_node_to_path(self.tree), {
-            0: [(0, -1)],
+            0: [(0, 0)],
             1: [(0, 1), (1, 1), (2, 1)],
-            2: [(0, 1), (1, -1), (3, 1)],
-            3: [(0, 1), (1, 1), (2, -1)],
-            4: [(0, 1), (1, -1), (3, -1)],
+            2: [(0, 1), (1, 0), (3, 1)],
+            3: [(0, 1), (1, 1), (2, 0)],
+            4: [(0, 1), (1, 0), (3, 0)],
         })
 
     def test_call_training(self):

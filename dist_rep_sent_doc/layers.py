@@ -24,18 +24,18 @@ class HierarchicalSoftmaxLayer(base._Layer):
         # training
         node_to_path = self._get_node_to_path(tree)
         shape = (len(node_to_path), max(len(path) for path in node_to_path.values()))
-        nodes, signs, masks = \
-            np.zeros(shape, dtype=np.int32), np.zeros(shape, dtype=np.float32), np.zeros(shape, dtype=np.bool)
+        nodes, childs, masks = \
+            np.zeros(shape, dtype=np.int32), np.zeros(shape, dtype=np.bool), np.zeros(shape, dtype=np.bool)
         for i in range(len(node_to_path)):
-            for j, (node, sign) in enumerate(node_to_path[i]):
+            for j, (node, child) in enumerate(node_to_path[i]):
                 nodes[i, j] = node
-                signs[i, j] = sign
+                childs[i, j] = child == 1
                 masks[i, j] = True
         indices = [
-            [node, (0 if sign == 1 else len(node_id_to_index) - 1) + node_]
-            for node, path in node_to_path.items() for node_, sign in path
+            [node, (0 if child == 1 else len(node_id_to_index) - 1) + node_]
+            for node, path in node_to_path.items() for node_, child in path
         ]
-        self.nodes, self.signs, self.masks = tf.constant(nodes), tf.constant(signs), tf.constant(masks)
+        self.nodes, self.childs, self.masks = tf.constant(nodes), tf.constant(childs), tf.constant(masks)
 
         # output
         self.output_index = tf.sparse_reorder(tf.SparseTensor(
@@ -49,7 +49,7 @@ class HierarchicalSoftmaxLayer(base._Layer):
         '''
         if tree.left:
             return {
-                node: [(tree.id_, -1 if i == 0 else 1)] + path
+                node: [(tree.id_, i)] + path
                 for i, child in enumerate([tree.left, tree.right])
                 for node, path in self._get_node_to_path(child).items()
             }
@@ -72,14 +72,14 @@ class HierarchicalSoftmaxLayer(base._Layer):
             input_, target = inputs
             masks = tf.reshape(tf.gather(self.masks, target), [-1])
             nodes = tf.boolean_mask(tf.reshape(tf.gather(self.nodes, target), [-1]), masks)
-            signs = tf.boolean_mask(tf.reshape(tf.gather(self.signs, target), [-1]), masks)
+            childs = tf.boolean_mask(tf.reshape(tf.gather(self.childs, target), [-1]), masks)
             indices = tf.boolean_mask(tf.reshape(
                 tf.tile(tf.reshape(tf.range(tf.shape(input_)[0]), [-1, 1]), [1, self.nodes.shape.as_list()[1]]), [-1]
             ), masks)
-            return tf.reduce_sum(tf.log(tf.nn.sigmoid(signs * (
-                tf.reduce_sum(tf.gather(self.W, nodes) * tf.gather(input_, indices), 1) +
-                tf.gather(self.b, nodes)
-            )))) / tf.cast(tf.shape(input_)[0], tf.float32)
+            node_outputs = tf.reduce_sum(tf.gather(self.W, nodes) * tf.gather(input_, indices), 1) + tf.gather(self.b, nodes)
+            return tf.reduce_sum(tf.log(tf.nn.sigmoid(
+                tf.where(childs, node_outputs, tf.negative(node_outputs))
+            ))) / tf.cast(tf.shape(input_)[0], tf.float32)
         else:
             node_outputs = tf.matmul(inputs, tf.transpose(self.W)) + self.b
             return tf.transpose(tf.sparse_tensor_dense_matmul(self.output_index, tf.transpose(
