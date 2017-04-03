@@ -89,6 +89,7 @@ def load_and_enqueue(
                 X_words.append([word_to_index[word_] for word_ in window])
                 y.append(word_to_index[word])
             sess.run(enqueue_many, feed_dict={X_doc_input: X_doc, X_words_input: X_words, y_input: y})
+    data['cur_epoch'] = epoch_size
 
 
 @memory.cache(ignore=['docs', 'word_to_freq', 'word_to_index', 'tree', 'word_to_prob'])
@@ -145,9 +146,9 @@ def run_pv_dm(
             sess.run(train_op, feed_dict={lr: cur_lr})
             if data['cur_epoch'] != cur_epoch:
                 print(datetime.datetime.now(), f'finished epoch {cur_epoch}')
+                cur_epoch = data['cur_epoch']
                 if cur_epoch == epoch_size:
                     break
-                cur_epoch = data['cur_epoch']
                 cur_lr -= lr_delta
 
         # save

@@ -18,7 +18,9 @@ It is not described how unknown words during validation are handled.
 It is not described what process of fitting the logistic regression is used, we use sklearn's defaults.
 
 ### Can be missed
-A detailed explanation to window size is in the Experimental Protocols section.
+A detailed explanation of window size is in the Experimental Protocols section.
+
+The imdb dataset uses a neural net and a logistic regression, instead of logistic regression alone.
 
 ### Gensim differences
 - Option to remove infrequent words entirely.
