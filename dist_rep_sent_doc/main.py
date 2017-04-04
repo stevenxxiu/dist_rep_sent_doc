@@ -10,7 +10,6 @@ import numpy as np
 import statsmodels.api as sm
 import tensorflow as tf
 from tensorflow.contrib.tensorboard.plugins import projector
-from tensorflow.python.ops import init_ops
 
 from dist_rep_sent_doc.data import imdb, sstb
 from dist_rep_sent_doc.huffman import build_huffman
@@ -95,7 +94,7 @@ def load_and_enqueue(
 
 @memory.cache(ignore=['docs', 'word_to_freq', 'word_to_index', 'tree', 'word_to_prob'])
 def run_pv_dm(
-    name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, window_size, embedding_size, cur_lr,
+    name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, window_size, embedding_size, cur_lr, min_lr,
     batch_size, epoch_size, train_model_path=None
 ):
     # queue
@@ -139,7 +138,7 @@ def run_pv_dm(
             saver.restore(sess, os.path.join(train_model_path, 'model.ckpt'))
 
         # train
-        lr_delta = (cur_lr - 0.001) / len(docs)
+        lr_delta = (cur_lr - min_lr) / len(docs)
         cur_epoch = 0
         data = {'cur_epoch': cur_epoch}
         threading.Thread(target=load_and_enqueue, args=(
@@ -151,10 +150,13 @@ def run_pv_dm(
             sess.run(train_op, feed_dict={lr: cur_lr})
             if data['cur_epoch'] != cur_epoch:
                 print(datetime.datetime.now(), f'finished epoch {cur_epoch}')
+                if training_:
+                    cur_lr -= lr_delta
+                else:
+                    cur_lr = ((cur_lr - min_lr) / (epoch_size - cur_epoch)) + min_lr
                 cur_epoch = data['cur_epoch']
                 if cur_epoch == epoch_size:
                     break
-                cur_lr -= lr_delta
 
         # save
         path = os.path.join('__cache__', 'tf', f'{name}-{uuid.uuid4()}')
@@ -191,11 +193,11 @@ def main():
         # pv dm
         pv_dm_train_path = run_pv_dm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=10, embedding_size=100, cur_lr=0.025, batch_size=2048, epoch_size=20
+            window_size=10, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=2048, epoch_size=20
         )
         pv_dm_test_path = run_pv_dm(
             f'{name}_val', test, *tables, training_=False,
-            window_size=10, embedding_size=100, cur_lr=0.1, batch_size=2048, epoch_size=3,
+            window_size=10, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=2048, epoch_size=3,
             train_model_path=pv_dm_train_path
         )
 
@@ -214,11 +216,11 @@ def main():
         # pv dm
         pv_dm_train_path = run_pv_dm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=8, embedding_size=400, cur_lr=0.025, batch_size=256, epoch_size=5
+            window_size=10, embedding_size=400, cur_lr=0.025, batch_size=256, epoch_size=5
         )
         pv_dm_test_path = run_pv_dm(
             f'{name}_val', test, *tables, training_=False,
-            window_size=8, embedding_size=400, cur_lr=0.025, batch_size=256, epoch_size=100,
+            window_size=10, embedding_size=400, cur_lr=0.025, batch_size=256, epoch_size=100,
             train_model_path=pv_dm_train_path
         )
 
