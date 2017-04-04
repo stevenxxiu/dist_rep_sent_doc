@@ -142,7 +142,7 @@ def run_pv_dm(
             saver.restore(sess, os.path.join(train_model_path, 'model.ckpt'))
 
         # train
-        lr_delta = (cur_lr - min_lr) / len(docs)
+        lr_delta = (cur_lr - min_lr) / epoch_size
         cur_epoch = 0
         data = {'cur_epoch': cur_epoch}
         threading.Thread(target=load_and_enqueue, args=(
