@@ -7,6 +7,7 @@ from collections import Counter
 
 import joblib
 import numpy as np
+import statsmodels.api as sm
 import tensorflow as tf
 from tensorflow.contrib.tensorboard.plugins import projector
 from tensorflow.python.ops import init_ops
@@ -162,32 +163,23 @@ def run_pv_dm(
         return path
 
 
-def run_log_reg(train_docs, test_docs, pv_dm_train_path, pv_dm_test_path, embedding_size, batch_size, epoch_size):
-    X = tf.placeholder(tf.float32, [None, embedding_size])
-    y = tf.placeholder(tf.int32, [None])
-    dense = tf.layers.dense(X, 5, kernel_initializer=init_ops.glorot_uniform_initializer())
-    pred = tf.argmax(dense, 1)
-    loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=dense, labels=y))
-    train_op = tf.train.AdadeltaOptimizer(1).minimize(loss)
-
+def run_log_reg(train_docs, test_docs, pv_dm_train_path, pv_dm_test_path, embedding_size):
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-
         pv_dm_train = tf.Variable(tf.zeros([len(train_docs), embedding_size]))
         pv_dm_test = tf.Variable(tf.zeros([len(test_docs), embedding_size]))
         tf.train.Saver({'emb_doc': pv_dm_train}).restore(sess, os.path.join(pv_dm_train_path, 'model.ckpt'))
         tf.train.Saver({'emb_doc': pv_dm_test}).restore(sess, os.path.join(pv_dm_test_path, 'model.ckpt'))
 
-        train_X = pv_dm_train.eval(sess)
-        train_y = np.array([doc[0] for doc in train_docs])
-        for i in range(epoch_size):
-            p = np.random.permutation(len(train_y))
-            train_X_, train_y_ = train_X[p], train_y[p]
-            for j in range(0, len(train_y), batch_size):
-                batch_X, batch_y = train_X_[j:j + batch_size], train_y_[j:j + batch_size]
-                sess.run(train_op, feed_dict={X: batch_X, y: batch_y})
+        i = [i for i, doc in enumerate(train_docs) if doc[0] is not None]
+        train_X = pv_dm_train.eval(sess)[i]
+        train_y = np.array([doc[0] for doc in train_docs], dtype=np.float32)[i]
+        logit = sm.Logit(train_y, train_X)
+        predictor = logit.fit(disp=0)
 
-        print(Counter(sess.run(pred, {X: pv_dm_test})))
+        test_X = pv_dm_test.eval(sess)
+        test_pred = predictor.predict(test_X)
+        corrects = sum(np.rint(test_pred) == [doc[0] for doc in test_docs])
+        print(f'error rate: {(len(test_pred) - corrects) / len(test_pred)}')
 
 
 def main():
@@ -203,13 +195,13 @@ def main():
         )
         pv_dm_test_path = run_pv_dm(
             f'{name}_val', test, *tables, training_=False,
-            window_size=10, embedding_size=100, cur_lr=0.025, batch_size=2048, epoch_size=20,
+            window_size=10, embedding_size=100, cur_lr=0.1, batch_size=2048, epoch_size=3,
             train_model_path=pv_dm_train_path
         )
 
         # log reg
         run_log_reg(
-            train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=100, batch_size=256, epoch_size=5
+            train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=100
         )
 
     elif name in ('sstb_2', 'sstb_5'):
@@ -232,7 +224,7 @@ def main():
 
         # log reg
         run_log_reg(
-            train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=400, batch_size=256, epoch_size=5
+            train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=400
         )
 
 
