@@ -26,6 +26,7 @@ The imdb dataset uses a neural net and a logistic regression, instead of logisti
 - Option to remove infrequent words entirely.
 - Frequent word subsampling different.
 - Reduced window sampling for the pv-dm average model, which is not present in the paper.
+- Hierarchical softmax has no bias.
 
 ## Code
 See whether using theano boolean masks are faster or multiplies by the mask are faster.

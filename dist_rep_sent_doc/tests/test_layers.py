@@ -40,7 +40,6 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
         l = HierarchicalSoftmaxLayer(
             self.tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4},
             W_initializer=tf.constant_initializer([[.01, .02], [.03, .04], [.05, .06], [.07, .08]]),
-            b_initializer=tf.constant_initializer(np.array([.11, .12, .13, .14]))
         )
         cost = l.apply([X, y], training=True)
         with tf.Session() as sess:
@@ -51,14 +50,14 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
             })
             assert_array_almost_equal(res, np.array([
                 (
-                    np.log(expit(np.dot([.16, .17], [.01, .02]) + 0.11)) +
-                    np.log(1 - expit(np.dot([.16, .17], [.03, .04]) + 0.12)) +
-                    np.log(expit(np.dot([.16, .17], [.07, .08]) + 0.14))
+                    np.log(expit(np.dot([.16, .17], [.01, .02]))) +
+                    np.log(1 - expit(np.dot([.16, .17], [.03, .04]))) +
+                    np.log(expit(np.dot([.16, .17], [.07, .08])))
                 ), (
-                    np.log(expit(np.dot([.18, .19], [.01, .02]) + 0.11)) +
-                    np.log(expit(np.dot([.18, .19], [.03, .04]) + 0.12)) +
-                    np.log(expit(np.dot([.18, .19], [.05, .06]) + 0.13))
-                ), np.log(1 - expit(np.dot([.20, .21], [.01, .02]) + 0.11))
+                    np.log(expit(np.dot([.18, .19], [.01, .02]))) +
+                    np.log(expit(np.dot([.18, .19], [.03, .04]))) +
+                    np.log(expit(np.dot([.18, .19], [.05, .06])))
+                ), np.log(1 - expit(np.dot([.20, .21], [.01, .02])))
             ]).mean(), decimal=7)
 
     def test_get_output_for(self):
@@ -66,7 +65,6 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
         l = HierarchicalSoftmaxLayer(
             self.tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4},
             W_initializer=tf.constant_initializer([[.01, .02], [.03, .04], [.05, .06], [.07, .08]]),
-            b_initializer=tf.constant_initializer(np.array([.11, .12, .13, .14]))
         )
         probs = l.apply(X, training=False)
         with tf.Session() as sess:
@@ -75,9 +73,9 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
                 X: np.array([[.16, .17], [.18, .19], [.20, .21]]),
             })
             assert_array_almost_equal(res[0][:2], np.array([
-                np.log(1 - expit(np.dot([.16, .17], [.01, .02]) + 0.11)), (
-                    np.log(expit(np.dot([.16, .17], [.01, .02]) + 0.11)) +
-                    np.log(expit(np.dot([.16, .17], [.03, .04]) + 0.12)) +
-                    np.log(expit(np.dot([.16, .17], [.05, .06]) + 0.13))
+                np.log(1 - expit(np.dot([.16, .17], [.01, .02]))), (
+                    np.log(expit(np.dot([.16, .17], [.01, .02]))) +
+                    np.log(expit(np.dot([.16, .17], [.03, .04]))) +
+                    np.log(expit(np.dot([.16, .17], [.05, .06])))
                 )
             ]), decimal=7)

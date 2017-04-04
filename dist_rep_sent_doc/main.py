@@ -66,7 +66,7 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_va
     projector.visualize_embeddings(summary_writer, config)
 
     # save model
-    saver = tf.train.Saver({'emb_word': emb_word, 'emb_doc': emb_doc, 'hs_W': hs_vars[0], 'hs_b': hs_vars[1]})
+    saver = tf.train.Saver({'emb_word': emb_word, 'emb_doc': emb_doc, 'hs_W': hs_vars[0]})
     saver.save(sess, os.path.join(path, 'model.ckpt'))
 
 
@@ -107,8 +107,12 @@ def run_pv_dm(
     # network
     X_doc, X_words, y = queue.dequeue_up_to(batch_size)
     lr = tf.placeholder(tf.float32, [])
-    emb_doc = tf.Variable(tf.random_normal([len(docs), embedding_size]))
-    emb_word = tf.Variable(tf.random_normal([len(word_to_index), embedding_size]))
+    emb_doc = tf.Variable(tf.random_uniform(
+        [len(docs), embedding_size], - 0.5 / embedding_size, 0.5 / embedding_size
+    ))
+    emb_word = tf.Variable(tf.random_uniform(
+        [len(word_to_index), embedding_size], - 0.5 / embedding_size, 0.5 / embedding_size
+    ))
     emb = tf.concat([
         tf.reshape(tf.nn.embedding_lookup(emb_doc, X_doc), [-1, 1, embedding_size]),
         tf.nn.embedding_lookup(emb_word, X_words)
@@ -130,7 +134,7 @@ def run_pv_dm(
 
         # load trained model if we are doing inference
         if not training_:
-            saver = tf.train.Saver({'emb_word': emb_word, 'hs_W': hs_vars[0], 'hs_b': hs_vars[1]})
+            saver = tf.train.Saver({'emb_word': emb_word, 'hs_W': hs_vars[0]})
             saver.restore(sess, os.path.join(train_model_path, 'model.ckpt'))
 
         # train
@@ -164,7 +168,7 @@ def run_log_reg(train_docs, test_docs, pv_dm_train_path, pv_dm_test_path, embedd
     dense = tf.layers.dense(X, 5, kernel_initializer=init_ops.glorot_uniform_initializer())
     pred = tf.argmax(dense, 1)
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=dense, labels=y))
-    train = tf.train.AdadeltaOptimizer(1).minimize(loss)
+    train_op = tf.train.AdadeltaOptimizer(1).minimize(loss)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -181,10 +185,9 @@ def run_log_reg(train_docs, test_docs, pv_dm_train_path, pv_dm_test_path, embedd
             train_X_, train_y_ = train_X[p], train_y[p]
             for j in range(0, len(train_y), batch_size):
                 batch_X, batch_y = train_X_[j:j + batch_size], train_y_[j:j + batch_size]
-                sess.run(train, feed_dict={X: batch_X, y: batch_y})
+                sess.run(train_op, feed_dict={X: batch_X, y: batch_y})
 
-        print(Counter(sess.run(pred, {X: train_X})))
-        # print(sess.run(pred, {X: pv_dm_test}))
+        print(Counter(sess.run(pred, {X: pv_dm_test})))
 
 
 def main():

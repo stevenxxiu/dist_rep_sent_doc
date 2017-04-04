@@ -11,15 +11,13 @@ __all__ = ['HierarchicalSoftmaxLayer']
 # noinspection PyProtectedMember,PyAttributeOutsideInit
 class HierarchicalSoftmaxLayer(base._Layer):
     def __init__(
-        self, tree, node_id_to_index,
-        W_initializer=init_ops.glorot_uniform_initializer(), b_initializer=init_ops.zeros_initializer(),
+        self, tree, node_id_to_index, W_initializer=init_ops.zeros_initializer(),
         name=None, **kwargs
     ):
         super().__init__(name=name, **kwargs)
         self.tree = tree
         self.node_id_to_index = node_id_to_index
         self.W_initializer = W_initializer
-        self.b_initializer = b_initializer
 
         # training
         node_to_path = self._get_node_to_path(tree)
@@ -62,10 +60,6 @@ class HierarchicalSoftmaxLayer(base._Layer):
             'W', shape=[len(self.node_id_to_index) - 1, input_shape[-1].value],
             initializer=self.W_initializer
         )
-        self.b = vs.get_variable(
-            'b', shape=[len(self.node_id_to_index) - 1],
-            initializer=self.b_initializer
-        )
 
     def call(self, inputs, training=False):
         if training:
@@ -76,12 +70,11 @@ class HierarchicalSoftmaxLayer(base._Layer):
             indices = tf.boolean_mask(tf.reshape(
                 tf.tile(tf.reshape(tf.range(tf.shape(input_)[0]), [-1, 1]), [1, self.nodes.shape.as_list()[1]]), [-1]
             ), masks)
-            return tf.reduce_sum(tf.log(tf.nn.sigmoid(signs * (
-                tf.reduce_sum(tf.gather(self.W, nodes) * tf.gather(input_, indices), 1) +
-                tf.gather(self.b, nodes)
-            )))) / tf.cast(tf.shape(input_)[0], tf.float32)
+            return tf.reduce_sum(tf.log(tf.nn.sigmoid(
+                signs * tf.reduce_sum(tf.gather(self.W, nodes) * tf.gather(input_, indices), 1)
+            ))) / tf.cast(tf.shape(input_)[0], tf.float32)
         else:
-            node_outputs = tf.matmul(inputs, tf.transpose(self.W)) + self.b
+            node_outputs = tf.matmul(inputs, tf.transpose(self.W))
             return tf.transpose(tf.sparse_tensor_dense_matmul(self.output_index, tf.transpose(
                 tf.log(tf.nn.sigmoid(tf.concat([node_outputs, -node_outputs], 1)))
             )))
