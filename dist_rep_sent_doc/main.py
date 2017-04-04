@@ -83,8 +83,12 @@ def load_and_enqueue(
             X_doc, X_words, y = [], [], []
             doc = [word for word in docs[j][1] if word in word_to_index and np.random.random() < word_to_prob[word]]
             for k, word in enumerate(doc):
-                window = doc[k - window_size + 1:k]
-                window = ['<null>'] * (window_size - len(window) - 1) + window
+                # window_size before word and window_size after word
+                before = doc[max(k - window_size, 0):k]
+                before = (window_size - len(before)) * ['<null>'] + before
+                after = doc[k + 1:min(k + 1 + window_size, len(doc))]
+                after = after + (window_size - len(after)) * ['<null>']
+                window = before + after
                 X_doc.append(j)
                 X_words.append([word_to_index[word_] for word_ in window])
                 y.append(word_to_index[word])
@@ -99,7 +103,7 @@ def run_pv_dm(
 ):
     # queue
     X_doc_input = tf.placeholder(tf.int32, [None])
-    X_words_input = tf.placeholder(tf.int32, [None, window_size - 1])
+    X_words_input = tf.placeholder(tf.int32, [None, 2 * window_size])
     y_input = tf.placeholder(tf.int32, [None])
     vars_ = [X_doc_input, X_words_input, y_input]
     queue = tf.FIFOQueue(2 * batch_size, [var.dtype for var in vars_], shapes=[var.shape[1:] for var in vars_])
@@ -117,7 +121,7 @@ def run_pv_dm(
         tf.reshape(tf.nn.embedding_lookup(emb_doc, X_doc), [-1, 1, embedding_size]),
         tf.nn.embedding_lookup(emb_word, X_words)
     ], 1)
-    flatten = tf.reshape(emb, [-1, window_size * embedding_size])
+    flatten = tf.reshape(emb, [-1, (2 * window_size + 1) * embedding_size])
     l = HierarchicalSoftmaxLayer(tree, word_to_index, name='hs')
     loss = -l.apply([flatten, y], training=True)
     hs_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='hs')
@@ -193,11 +197,11 @@ def main():
         # pv dm
         pv_dm_train_path = run_pv_dm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=10, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=2048, epoch_size=20
+            window_size=5, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=2048, epoch_size=20
         )
         pv_dm_test_path = run_pv_dm(
             f'{name}_val', test, *tables, training_=False,
-            window_size=10, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=2048, epoch_size=3,
+            window_size=5, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=2048, epoch_size=3,
             train_model_path=pv_dm_train_path
         )
 
@@ -216,11 +220,11 @@ def main():
         # pv dm
         pv_dm_train_path = run_pv_dm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=10, embedding_size=400, cur_lr=0.025, batch_size=256, epoch_size=5
+            window_size=4, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=2048, epoch_size=20
         )
         pv_dm_test_path = run_pv_dm(
             f'{name}_val', test, *tables, training_=False,
-            window_size=10, embedding_size=400, cur_lr=0.025, batch_size=256, epoch_size=100,
+            window_size=4, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=2048, epoch_size=3,
             train_model_path=pv_dm_train_path
         )
 
