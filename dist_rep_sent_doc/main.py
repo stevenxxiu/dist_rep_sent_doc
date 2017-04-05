@@ -18,17 +18,18 @@ from dist_rep_sent_doc.layers import HierarchicalSoftmaxLayer
 memory = joblib.Memory('__cache__', verbose=0)
 
 
-@memory.cache(ignore=['docsets'])
-def gen_tables(name, docsets, vocab_min_freq, sample):
+@memory.cache(ignore=['docs'])
+def gen_tables(name, docs, vocab_min_freq, sample):
     total_count = 0
 
     # map word to counts and indexes, infrequent words are removed entirely
-    word_to_freq = {'<null>': 0}
-    for word, count in Counter(word for docs in docsets for doc in docs for word in doc[1]).items():
+    word_to_freq = {}
+    for word, count in Counter(word for doc in docs for word in doc[1]).items():
         if count >= vocab_min_freq:
             word_to_freq[word] = count
             total_count += count
     word_to_index = {word: i for i, word in enumerate(word_to_freq)}
+    word_to_index['<null>'] = len(word_to_index)
 
     # get huffman tree
     tree = build_huffman(word_to_freq)
@@ -106,7 +107,7 @@ def run_pv_dm(
     X_words_input = tf.placeholder(tf.int32, [None, 2 * window_size])
     y_input = tf.placeholder(tf.int32, [None])
     vars_ = [X_doc_input, X_words_input, y_input]
-    queue = tf.FIFOQueue(2 * batch_size, [var.dtype for var in vars_], shapes=[var.shape[1:] for var in vars_])
+    queue = tf.FIFOQueue(4096, [var.dtype for var in vars_], shapes=[var.shape[1:] for var in vars_])
 
     # network
     X_doc, X_words, y = queue.dequeue_up_to(batch_size)
@@ -192,7 +193,7 @@ def main():
     name = 'imdb'
     if name == 'imdb':
         train, val, test = imdb.load_data('../data/imdb_sentiment')
-        tables = gen_tables(name, [train, val, test], 2, 1e-3)
+        tables = gen_tables(name, train, 2, 1e-3)
 
         # pv dm
         pv_dm_train_path = run_pv_dm(
@@ -215,7 +216,7 @@ def main():
             '../data/stanford_sentiment_treebank/class_2' if name == 'sstb_2' else
             '../data/stanford_sentiment_treebank/class_5'
         )
-        tables = gen_tables(name, [train, val, test], 2, 1e-5)
+        tables = gen_tables(name, train, 2, 1e-5)
 
         # pv dm
         pv_dm_train_path = run_pv_dm(
