@@ -27,11 +27,11 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
     def test_get_node_to_path(self):
         l = HierarchicalSoftmaxLayer(self.tree, {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4})
         self.assertEqual(l._get_node_to_path(self.tree), {
-            0: [(0, -1)],
-            1: [(0, 1), (1, 1), (2, 1)],
-            2: [(0, 1), (1, -1), (3, 1)],
-            3: [(0, 1), (1, 1), (2, -1)],
-            4: [(0, 1), (1, -1), (3, -1)],
+            0: [(0, 1)],
+            1: [(0, -1), (1, -1), (2, -1)],
+            2: [(0, -1), (1, 1), (3, -1)],
+            3: [(0, -1), (1, -1), (2, 1)],
+            4: [(0, -1), (1, 1), (3, 1)],
         })
 
     def test_call_training(self):
@@ -50,14 +50,14 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
             })
             assert_array_almost_equal(res, np.array([
                 (
-                    np.log(expit(np.dot([.16, .17], [.01, .02]))) +
-                    np.log(1 - expit(np.dot([.16, .17], [.03, .04]))) +
-                    np.log(expit(np.dot([.16, .17], [.07, .08])))
+                    np.log(1 - expit(np.dot([.16, .17], [.01, .02]))) +
+                    np.log(expit(np.dot([.16, .17], [.03, .04]))) +
+                    np.log(1 - expit(np.dot([.16, .17], [.07, .08])))
                 ), (
-                    np.log(expit(np.dot([.18, .19], [.01, .02]))) +
-                    np.log(expit(np.dot([.18, .19], [.03, .04]))) +
-                    np.log(expit(np.dot([.18, .19], [.05, .06])))
-                ), np.log(1 - expit(np.dot([.20, .21], [.01, .02])))
+                    np.log(1 - expit(np.dot([.18, .19], [.01, .02]))) +
+                    np.log(1 - expit(np.dot([.18, .19], [.03, .04]))) +
+                    np.log(1 - expit(np.dot([.18, .19], [.05, .06])))
+                ), np.log(expit(np.dot([.20, .21], [.01, .02])))
             ]).mean(), decimal=7)
 
     def test_get_output_for(self):
@@ -73,9 +73,9 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
                 X: np.array([[.16, .17], [.18, .19], [.20, .21]]),
             })
             assert_array_almost_equal(res[0][:2], np.array([
-                np.log(1 - expit(np.dot([.16, .17], [.01, .02]))), (
-                    np.log(expit(np.dot([.16, .17], [.01, .02]))) +
-                    np.log(expit(np.dot([.16, .17], [.03, .04]))) +
-                    np.log(expit(np.dot([.16, .17], [.05, .06])))
+                np.log(expit(np.dot([.16, .17], [.01, .02]))), (
+                    np.log(1 - expit(np.dot([.16, .17], [.01, .02]))) +
+                    np.log(1 - expit(np.dot([.16, .17], [.03, .04]))) +
+                    np.log(1 - expit(np.dot([.16, .17], [.05, .06])))
                 )
             ]), decimal=7)

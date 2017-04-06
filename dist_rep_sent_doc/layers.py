@@ -47,7 +47,7 @@ class HierarchicalSoftmaxLayer(base._Layer):
         '''
         if tree.left:
             return {
-                node: [(tree.id_, -1 if i == 0 else 1)] + path
+                node: [(tree.id_, 1 if i == 0 else -1)] + path
                 for i, child in enumerate([tree.left, tree.right])
                 for node, path in self._get_node_to_path(child).items()
             }

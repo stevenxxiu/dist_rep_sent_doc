@@ -21,7 +21,7 @@ class HuffmanNode:
 def build_huffman(word_to_freq):
     queue = [HuffmanNode(word, freq) for word, freq in word_to_freq.items()]
     heapq.heapify(queue)
-    while len(queue) > 1:
+    for i in range(len(word_to_freq) - 1):
         children = [heapq.heappop(queue), heapq.heappop(queue)]
-        heapq.heappush(queue, HuffmanNode(len(queue), children[0].freq + children[1].freq, *children))
+        heapq.heappush(queue, HuffmanNode(i, children[0].freq + children[1].freq, *children))
     return queue[0]

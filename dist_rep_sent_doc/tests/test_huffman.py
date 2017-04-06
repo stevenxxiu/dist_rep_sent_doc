@@ -9,12 +9,12 @@ class TestHuffman(unittest.TestCase):
         self.assertEqual(
             build_huffman({'a': 15, 'b': 7, 'c': 6, 'd': 6, 'e': 5}),
             HuffmanNode(
-                0, 39,
+                3, 39,
                 HuffmanNode('a', 15),
                 HuffmanNode(
-                    1, 24,
-                    HuffmanNode(3, 11, HuffmanNode('e', 5), HuffmanNode('c', 6)),
-                    HuffmanNode(2, 13, HuffmanNode('d', 6), HuffmanNode('b', 7))
+                    2, 24,
+                    HuffmanNode(0, 11, HuffmanNode('e', 5), HuffmanNode('c', 6)),
+                    HuffmanNode(1, 13, HuffmanNode('d', 6), HuffmanNode('b', 7))
                 )
             )
         )
