@@ -10,7 +10,6 @@ import joblib
 import numpy as np
 import statsmodels.api as sm
 import tensorflow as tf
-from numpy import random
 from tensorflow.contrib.tensorboard.plugins import projector
 
 from dist_rep_sent_doc.data import imdb, sstb
@@ -79,16 +78,18 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_va
     saver.save(sess, os.path.join(path, 'model.ckpt'))
 
 
-def load_and_enqueue(docs, word_to_prob, word_to_index, window_size, sess, queue, X_doc_input, X_words_input, y_input):
-    rand_state = random.RandomState(0)
+def load_and_enqueue(
+    docs, word_to_prob, word_to_index, window_size, sess, queue, X_doc_input, X_words_input, y_input,
+    random
+):
     enqueue_many_op = queue.enqueue_many([X_doc_input, X_words_input, y_input])
-    p = rand_state.permutation(len(docs))
+    p = random.permutation(len(docs))
     for j in p:
         # remove infrequent words & sample frequent words
         X_doc, X_words, y = [], [], []
         doc = [
             word for word in docs[j][1] if
-            word in word_to_index and rand_state.rand() * 2**32 < word_to_prob[word]
+            word in word_to_index and random.rand() * 2**32 < word_to_prob[word]
         ]
         for k, word in enumerate(doc):
             # window_size before word and window_size after word
@@ -115,7 +116,7 @@ def run_pv_dm(
     y_input = tf.placeholder(tf.int32, [None])
     vars_ = [X_doc_input, X_words_input, y_input]
     queues = []
-    for i in range(batch_size):
+    for i in range(epoch_size):
         queues.append(tf.FIFOQueue(4096, [var.dtype for var in vars_], shapes=[var.shape[1:] for var in vars_]))
 
     # network
@@ -149,13 +150,13 @@ def run_pv_dm(
 
         emb_word_init = []
         for word, i in word_to_index.items():
-            once = random.RandomState(binascii.crc32(f'{word}0'.encode('utf-8')) & 0xffffffff)
+            once = np.random.RandomState(binascii.crc32(f'{word}0'.encode('utf-8')) & 0xffffffff)
             emb_word_init.append((once.rand(embedding_size) - 0.5) / embedding_size)
         sess.run(emb_word.assign(np.array(emb_word_init)))
 
         emb_doc_init = []
         for i in range(len(docs)):
-            once = random.RandomState(binascii.crc32(f'0 {i}'.encode('utf-8')) & 0xffffffff)
+            once = np.random.RandomState(binascii.crc32(f'0 {i}'.encode('utf-8')) & 0xffffffff)
             emb_doc_init.append((once.rand(embedding_size) - 0.5) / embedding_size)
         sess.run(emb_doc.assign(np.array(emb_doc_init)))
 
@@ -167,9 +168,11 @@ def run_pv_dm(
         # train
         lr_delta = (cur_lr - min_lr) / epoch_size
         print(datetime.datetime.now(), 'started training')
+        random = np.random.RandomState(0)
         for i in range(epoch_size):
             threading.Thread(target=load_and_enqueue, args=(
-                docs, word_to_prob, word_to_index, window_size, sess, queues[i], X_doc_input, X_words_input, y_input
+                docs, word_to_prob, word_to_index, window_size, sess, queues[i], X_doc_input, X_words_input, y_input,
+                random
             )).start()
             while True:
                 try:
@@ -184,8 +187,8 @@ def run_pv_dm(
 
         # save
         path = os.path.join('__cache__', 'tf', f'{name}-{uuid.uuid4()}')
-        os.makedirs(path)
-        save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_vars, sess)
+        # os.makedirs(path)
+        # save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_vars, sess)
         return path
 
 
@@ -212,24 +215,24 @@ def main():
     name = 'imdb'
     if name == 'imdb':
         train, val, test = imdb.load_data('../data/imdb_sentiment')
-        train = train[:100]
+        train = train[:1]
         tables = gen_tables(name, train, 2, 1e-3)
 
         # pv dm
         pv_dm_train_path = run_pv_dm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=5, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=1, epoch_size=1
+            window_size=5, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=1, epoch_size=4
         )
-        pv_dm_test_path = run_pv_dm(
-            f'{name}_val', test, *tables, training_=False,
-            window_size=5, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=1, epoch_size=3,
-            train_model_path=pv_dm_train_path
-        )
-
-        # log reg
-        run_log_reg(
-            train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=100
-        )
+        # pv_dm_test_path = run_pv_dm(
+        #     f'{name}_val', test, *tables, training_=False,
+        #     window_size=5, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=1, epoch_size=3,
+        #     train_model_path=pv_dm_train_path
+        # )
+        #
+        # # log reg
+        # run_log_reg(
+        #     train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=100
+        # )
 
     elif name in ('sstb_2', 'sstb_5'):
         train, val, test = sstb.load_data(
