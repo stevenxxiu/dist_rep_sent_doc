@@ -142,24 +142,7 @@ def run_pv_dm(
     if not training_:
         # only train document embeddings
         grads_and_vars = [(grad, var) for grad, var in grads_and_vars if var == emb_doc]
-    # train_op = opt.apply_gradients(grads_and_vars)
-
-    l1 = flatten[0]
-    l2a = tf.gather(l.W, tf.boolean_mask(tf.gather(l.nodes, y[0]), tf.gather(l.masks, y[0])))
-    fa = tf.nn.sigmoid(tf.matmul(tf.reshape(l1, [1, -1]), tf.transpose(l2a)))
-    ga = (tf.boolean_mask((tf.gather(l.signs, y[0]) + 1) / 2, tf.gather(l.masks, y[0])) - fa) * lr
-    neu1e = tf.reshape(tf.matmul(ga, l2a), [-1])
-    train_op = (
-        tf.scatter_add(
-            l.W, tf.boolean_mask(tf.gather(l.nodes, y[0]), tf.gather(l.masks, y[0])),
-            tf.reshape(ga, [-1, 1]) * tf.reshape(l1, [1, -1])
-        ),
-        tf.scatter_add(emb_doc, X_doc[0], tf.slice(neu1e, [0], [embedding_size])),
-        tf.scatter_add(
-            emb_word, X_words[0],
-            tf.reshape(tf.slice(neu1e, [embedding_size], [2 * window_size * embedding_size]), [-1, embedding_size])
-        ),
-    )
+    train_op = opt.apply_gradients(grads_and_vars)
 
     # run
     with tf.Session() as sess:
@@ -194,7 +177,6 @@ def run_pv_dm(
             while True:
                 try:
                     sess.run(train_op, feed_dict={lr: cur_lr, cur_epoch: i})
-                    print(np.sum(sess.run(emb_word)))
                 except tf.errors.OutOfRangeError:
                     break
             print(datetime.datetime.now(), f'finished epoch {i}')
@@ -205,8 +187,8 @@ def run_pv_dm(
 
         # save
         path = os.path.join('__cache__', 'tf', f'{name}-{uuid.uuid4()}')
-        # os.makedirs(path)
-        # save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_vars, sess)
+        os.makedirs(path)
+        save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_vars, sess)
         return path
 
 
@@ -233,7 +215,7 @@ def main():
     name = 'imdb'
     if name == 'imdb':
         train, val, test = imdb.load_data('../data/imdb_sentiment')
-        train = train[:1]
+        train = train[:100]
         tables = gen_tables(name, train, 2, 1e-3)
 
         # pv dm
@@ -241,16 +223,16 @@ def main():
             f'{name}_train', train, *tables, training_=True,
             window_size=5, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=1, epoch_size=4
         )
-        # pv_dm_test_path = run_pv_dm(
-        #     f'{name}_val', test, *tables, training_=False,
-        #     window_size=5, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=1, epoch_size=3,
-        #     train_model_path=pv_dm_train_path
-        # )
-        #
-        # # log reg
-        # run_log_reg(
-        #     train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=100
-        # )
+        pv_dm_test_path = run_pv_dm(
+            f'{name}_val', test, *tables, training_=False,
+            window_size=5, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=1, epoch_size=3,
+            train_model_path=pv_dm_train_path
+        )
+
+        # log reg
+        run_log_reg(
+            train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=100
+        )
 
     elif name in ('sstb_2', 'sstb_5'):
         train, val, test = sstb.load_data(
