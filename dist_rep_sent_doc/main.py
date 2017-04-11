@@ -1,10 +1,10 @@
-import binascii
 import csv
 import datetime
 import os
 import threading
 import uuid
 from collections import Counter
+from contextlib import suppress
 
 import joblib
 import numpy as np
@@ -46,7 +46,6 @@ def gen_tables(name, docs, vocab_min_freq, sample):
     for word, count in word_to_freq.items():
         ratio = sample / (count / total_count) if count > 0 else 1
         word_to_prob[word] = min(np.sqrt(ratio) + ratio, 1)
-        word_to_prob[word] = int(round(word_to_prob[word] * 2**32))
 
     return word_to_freq, word_to_index, tree, word_to_prob
 
@@ -79,30 +78,57 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_va
 
 
 def load_and_enqueue(
-    docs, word_to_prob, word_to_index, window_size, sess, queue, X_doc_input, X_words_input, y_input,
-    random
+    docs, sample_doc, enqueue_multiple, batch_size, sess,
+    queue, X_doc_input, X_words_input, y_input,
+    batch_size_queue, batch_size_input
 ):
+    # ensures each index in the batch corresponds to a different document
     enqueue_many_op = queue.enqueue_many([X_doc_input, X_words_input, y_input])
-    p = random.permutation(len(docs))
-    for j in p:
-        # remove infrequent words & sample frequent words
-        X_doc, X_words, y = [], [], []
-        doc = [
-            word for word in docs[j][1] if
-            word in word_to_index and random.rand() * 2**32 < word_to_prob[word]
-        ]
-        for k, word in enumerate(doc):
-            # window_size before word and window_size after word
-            before = doc[max(k - window_size, 0):k]
-            before = (window_size - len(before)) * ['\0'] + before
-            after = doc[k + 1:min(k + 1 + window_size, len(doc))]
-            after = after + (window_size - len(after)) * ['\0']
-            window = before + after
-            X_doc.append(j)
-            X_words.append([word_to_index[word_] for word_ in window])
-            y.append(word_to_index[word])
+    batch_size_enqueue_many_op = batch_size_queue.enqueue_many([batch_size_input])
+    p = iter(np.random.permutation(len(docs)))
+    batch = []
+    while True:
+        X_doc, X_words, y, batch_size_ = [], [], [], []
+        for i in range(enqueue_multiple):
+            # try fill batch up to batch_size
+            for j in range(batch_size - len(batch)):
+                with suppress(StopIteration):
+                    k = next(p)
+                    batch.append((k, sample_doc(docs[k])))
+            # try to get a sample from each document in batch
+            batch_ = []
+            for j, sample_doc_iter in batch:
+                with suppress(StopIteration):
+                    X_words_, y_ = next(sample_doc_iter)
+                    X_doc.append(j)
+                    X_words.append(X_words_)
+                    y.append(y_)
+                    batch_.append((j, sample_doc_iter))
+            batch = batch_
+            # update batch size queue with # of different documents we managed to get from
+            batch_size_.append(len(batch))
+        if not batch:
+            break
         sess.run(enqueue_many_op, feed_dict={X_doc_input: X_doc, X_words_input: X_words, y_input: y})
+        sess.run(batch_size_enqueue_many_op, feed_dict={batch_size_input: batch_size_})
     sess.run(queue.close())
+    sess.run(batch_size_queue.close())
+
+
+def sample_doc_pv_dm(doc, word_to_prob, word_to_index, window_size):
+    # remove infrequent words & sample frequent words
+    doc = [
+        word for word in doc[1] if
+        word in word_to_index and np.random.rand() < word_to_prob[word]
+    ]
+    for k, word in enumerate(doc):
+        # window_size before word and window_size after word
+        before = doc[max(k - window_size, 0):k]
+        before = (window_size - len(before)) * ['\0'] + before
+        after = doc[k + 1:min(k + 1 + window_size, len(doc))]
+        after = after + (window_size - len(after)) * ['\0']
+        window = before + after
+        yield [word_to_index[word_] for word_ in window], word_to_index[word]
 
 
 # @memory.cache(ignore=['docs', 'word_to_freq', 'word_to_index', 'tree', 'word_to_prob'])
@@ -114,14 +140,23 @@ def run_pv_dm(
     X_doc_input = tf.placeholder(tf.int32, [None])
     X_words_input = tf.placeholder(tf.int32, [None, 2 * window_size])
     y_input = tf.placeholder(tf.int32, [None])
-    vars_ = [X_doc_input, X_words_input, y_input]
-    queues = []
+    batch_size_input = tf.placeholder(tf.int32, [None])
+    enqueue_multiple = 8
+    queues, batch_size_queues = [], []
     for i in range(epoch_size):
-        queues.append(tf.FIFOQueue(4096, [var.dtype for var in vars_], shapes=[var.shape[1:] for var in vars_]))
+        queues.append(tf.FIFOQueue(
+            enqueue_multiple * batch_size, [var.dtype for var in [X_doc_input, X_words_input, y_input]],
+            shapes=[var.shape[1:] for var in [X_doc_input, X_words_input, y_input]]
+        ))
+        batch_size_queues.append(tf.FIFOQueue(
+            enqueue_multiple, [var.dtype for var in [batch_size_input]],
+            shapes=[var.shape[1:] for var in [batch_size_input]]
+        ))
 
     # network
     cur_epoch = tf.placeholder(tf.int32, [])
-    X_doc, X_words, y = tf.QueueBase.from_list(cur_epoch, queues).dequeue_up_to(batch_size)
+    batch_size_ = tf.QueueBase.from_list(cur_epoch, batch_size_queues).dequeue()
+    X_doc, X_words, y = tf.QueueBase.from_list(cur_epoch, queues).dequeue_up_to(batch_size_)
     lr = tf.placeholder(tf.float32, [])
     emb_doc = tf.Variable(tf.random_uniform(
         [len(docs), embedding_size], - 0.5 / embedding_size, 0.5 / embedding_size
@@ -148,18 +183,6 @@ def run_pv_dm(
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        emb_word_init = []
-        for word, i in word_to_index.items():
-            once = np.random.RandomState(binascii.crc32(f'{word}0'.encode('utf-8')) & 0xffffffff)
-            emb_word_init.append((once.rand(embedding_size) - 0.5) / embedding_size)
-        sess.run(emb_word.assign(np.array(emb_word_init)))
-
-        emb_doc_init = []
-        for i in range(len(docs)):
-            once = np.random.RandomState(binascii.crc32(f'0 {i}'.encode('utf-8')) & 0xffffffff)
-            emb_doc_init.append((once.rand(embedding_size) - 0.5) / embedding_size)
-        sess.run(emb_doc.assign(np.array(emb_doc_init)))
-
         # load trained model if we are doing inference
         if not training_:
             saver = tf.train.Saver({'emb_word': emb_word, 'hs_W': hs_vars[0]})
@@ -168,11 +191,12 @@ def run_pv_dm(
         # train
         lr_delta = (cur_lr - min_lr) / epoch_size
         print(datetime.datetime.now(), 'started training')
-        random = np.random.RandomState(0)
         for i in range(epoch_size):
             threading.Thread(target=load_and_enqueue, args=(
-                docs, word_to_prob, word_to_index, window_size, sess, queues[i], X_doc_input, X_words_input, y_input,
-                random
+                docs, lambda doc: sample_doc_pv_dm(doc, word_to_prob, word_to_index, window_size),
+                enqueue_multiple, batch_size, sess,
+                queues[i], X_doc_input, X_words_input, y_input,
+                batch_size_queues[i], batch_size_input
             )).start()
             while True:
                 try:
@@ -215,17 +239,16 @@ def main():
     name = 'imdb'
     if name == 'imdb':
         train, val, test = imdb.load_data('../data/imdb_sentiment')
-        train = train[:100]
         tables = gen_tables(name, train, 2, 1e-3)
 
         # pv dm
         pv_dm_train_path = run_pv_dm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=5, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=1, epoch_size=4
+            window_size=5, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=64, epoch_size=20
         )
         pv_dm_test_path = run_pv_dm(
             f'{name}_val', test, *tables, training_=False,
-            window_size=5, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=1, epoch_size=3,
+            window_size=5, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=64, epoch_size=3,
             train_model_path=pv_dm_train_path
         )
 

@@ -72,7 +72,7 @@ class HierarchicalSoftmaxLayer(base._Layer):
             ), masks)
             return tf.reduce_sum(-tf.nn.softplus(
                 -signs * tf.reduce_sum(tf.gather(self.W, nodes) * tf.gather(input_, indices), 1)
-            )) / tf.cast(tf.shape(input_)[0], tf.float32)
+            ))
         else:
             node_outputs = tf.matmul(inputs, tf.transpose(self.W))
             return tf.transpose(tf.sparse_tensor_dense_matmul(self.output_index, tf.transpose(
