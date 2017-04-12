@@ -244,11 +244,11 @@ def main():
         # pv dm
         pv_dm_train_path = run_pv_dm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=5, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=64, epoch_size=20
+            window_size=5, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=256, epoch_size=20
         )
         pv_dm_test_path = run_pv_dm(
             f'{name}_val', test, *tables, training_=False,
-            window_size=5, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=64, epoch_size=3,
+            window_size=5, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=2048, epoch_size=3,
             train_model_path=pv_dm_train_path
         )
 
