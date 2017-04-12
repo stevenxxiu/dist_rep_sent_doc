@@ -58,7 +58,7 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
                     np.log(1 - expit(np.dot([.18, .19], [.03, .04]))) +
                     np.log(1 - expit(np.dot([.18, .19], [.05, .06])))
                 ), np.log(expit(np.dot([.20, .21], [.01, .02])))
-            ]).mean(), decimal=7)
+            ]).sum(), decimal=7)
 
     def test_get_output_for(self):
         X = tf.placeholder(tf.float32, [None, 2])
