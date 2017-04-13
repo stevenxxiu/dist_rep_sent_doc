@@ -21,9 +21,11 @@ class HierarchicalSoftmaxLayer(base._Layer):
 
         # training
         node_to_path = self._get_node_to_path(tree)
-        shape = (len(node_to_path), max(len(path) for path in node_to_path.values()))
+        self.shape = (len(node_to_path), max(len(path) for path in node_to_path.values()))
         nodes, signs, masks = \
-            np.zeros(shape, dtype=np.int32), np.zeros(shape, dtype=np.float32), np.zeros(shape, dtype=np.bool)
+            np.zeros(self.shape, dtype=np.int32), \
+            np.zeros(self.shape, dtype=np.float32), \
+            np.zeros(self.shape, dtype=np.bool)
         for i in range(len(node_to_path)):
             for j, (node, sign) in enumerate(node_to_path[i]):
                 nodes[i, j] = node
@@ -68,7 +70,7 @@ class HierarchicalSoftmaxLayer(base._Layer):
             nodes = tf.boolean_mask(tf.reshape(tf.gather(self.nodes, target), [-1]), masks)
             signs = tf.boolean_mask(tf.reshape(tf.gather(self.signs, target), [-1]), masks)
             indices = tf.boolean_mask(tf.reshape(
-                tf.tile(tf.reshape(tf.range(tf.shape(input_)[0]), [-1, 1]), [1, self.nodes.shape.as_list()[1]]), [-1]
+                tf.tile(tf.reshape(tf.range(tf.shape(input_)[0]), [-1, 1]), [1, self.shape[1]]), [-1]
             ), masks)
             return tf.reduce_sum(-tf.nn.softplus(
                 -signs * tf.reduce_sum(tf.gather(self.W, nodes) * tf.gather(input_, indices), 1)
