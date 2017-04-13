@@ -32,18 +32,3 @@ The imdb dataset uses a neural net and a logistic regression, instead of logisti
 
 ## Code
 See whether using theano boolean masks are faster or multiplies by the mask are faster.
-
-### Cookbook
-To perform inference:
-
-    saver = tf.train.Saver({'emb_word': emb_word, 'emb_doc': emb_doc, 'hs_W': hs_vars[0], 'hs_b': hs_vars[1]})
-    saver.restore(sess, '__cache__/tf/train_5-47b9f78a-08da-47a7-8d26-af2f9e4df747/model.ckpt')
-    words = len(word_to_index) * [None]
-    for word, i in word_to_index.items():
-        words[i] = word
-    print(' '.join(words[i] for i in batch_X_words[0]))
-    print(words[batch_y[0]])
-    print(words[np.argmax(sess.run(l.apply(flatten, training=False), feed_dict={X_doc: batch_X_doc, X_words: batch_X_words}), 1)[0]])
-
-## Possible improvements
-Since we use a gpu, it might be possible to use softmax itself instead of hierarchical softmax, since it is likely quite fast too.
