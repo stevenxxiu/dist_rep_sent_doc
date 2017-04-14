@@ -159,10 +159,10 @@ def run_pv_dm(
     X_doc, X_words, y = tf.QueueBase.from_list(cur_epoch, queues).dequeue_up_to(batch_size_)
     lr = tf.placeholder(tf.float32, [])
     emb_doc = tf.Variable(tf.random_uniform(
-        [len(docs), embedding_size], - 0.5 / embedding_size, 0.5 / embedding_size
+        [len(docs), embedding_size], -0.5 / embedding_size, 0.5 / embedding_size
     ))
     emb_word = tf.Variable(tf.random_uniform(
-        [len(word_to_index), embedding_size], - 0.5 / embedding_size, 0.5 / embedding_size
+        [len(word_to_index), embedding_size], -0.5 / embedding_size, 0.5 / embedding_size
     ))
     emb = tf.concat([
         tf.reshape(tf.nn.embedding_lookup(emb_doc, X_doc), [-1, 1, embedding_size]),
