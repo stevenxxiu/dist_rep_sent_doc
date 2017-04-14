@@ -50,7 +50,7 @@ def gen_tables(name, docs, vocab_min_freq, sample):
     return word_to_freq, word_to_index, tree, word_to_prob
 
 
-def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_vars, sess):
+def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_W, sess):
     # visualize embeddings
     config = projector.ProjectorConfig()
     for emb_name, emb in [('emb_doc', emb_doc), ('emb_word', emb_word)]:
@@ -73,7 +73,7 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_va
     projector.visualize_embeddings(summary_writer, config)
 
     # save model
-    saver = tf.train.Saver({'emb_word': emb_word, 'emb_doc': emb_doc, 'hs_W': hs_vars[0]})
+    saver = tf.train.Saver({'emb_word': emb_word, 'emb_doc': emb_doc, 'hs_W': hs_W})
     saver.save(sess, os.path.join(path, 'model.ckpt'))
 
 
@@ -171,7 +171,6 @@ def run_pv_dm(
     flatten = tf.reshape(emb, [-1, (2 * window_size + 1) * embedding_size])
     l = HierarchicalSoftmaxLayer(tree, word_to_index, name='hs')
     loss = -l.apply([flatten, y], training=True)
-    hs_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='hs')
     opt = tf.train.GradientDescentOptimizer(lr)
     grads_and_vars = opt.compute_gradients(loss)
     if not training_:
@@ -185,7 +184,7 @@ def run_pv_dm(
 
         # load trained model if we are doing inference
         if not training_:
-            saver = tf.train.Saver({'emb_word': emb_word, 'hs_W': hs_vars[0]})
+            saver = tf.train.Saver({'emb_word': emb_word, 'hs_W': l.W})
             saver.restore(sess, os.path.join(train_model_path, 'model.ckpt'))
 
         # train
@@ -212,7 +211,7 @@ def run_pv_dm(
         # save
         path = os.path.join('__cache__', 'tf', f'{name}-{uuid.uuid4()}')
         os.makedirs(path)
-        save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_vars, sess)
+        save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, l.W, sess)
         return path
 
 
