@@ -56,6 +56,9 @@ class HierarchicalSoftmaxLayer(base._Layer):
         else:
             return {self.node_id_to_index[tree.id_]: []}
 
+    def _compute_output_shape(self, input_shape):
+        return None
+
     def build(self, input_shape):
         input_shape = tensor_shape.TensorShape(input_shape[0] if isinstance(input_shape, list) else input_shape)
         self.W = vs.get_variable(
