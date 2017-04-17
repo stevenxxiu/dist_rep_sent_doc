@@ -122,12 +122,10 @@ def sample_doc_pv_dm(doc, word_to_prob, word_to_index, window_size):
         word in word_to_index and np.random.rand() < word_to_prob[word]
     ]
     for k, word in enumerate(doc):
-        # window_size before word and window_size after word
+        # window_size before word
         before = doc[max(k - window_size, 0):k]
         before = (window_size - len(before)) * ['\0'] + before
-        after = doc[k + 1:min(k + 1 + window_size, len(doc))]
-        after = after + (window_size - len(after)) * ['\0']
-        window = before + after
+        window = before
         yield [word_to_index[word_] for word_ in window], word_to_index[word]
 
 
@@ -138,7 +136,7 @@ def run_pv_dm(
 ):
     # queue per epoch since we cannot reset queues
     X_doc_input = tf.placeholder(tf.int32, [None])
-    X_words_input = tf.placeholder(tf.int32, [None, 2 * window_size])
+    X_words_input = tf.placeholder(tf.int32, [None, window_size])
     y_input = tf.placeholder(tf.int32, [None])
     batch_size_input = tf.placeholder(tf.int32, [None])
     enqueue_multiple = 8
@@ -168,7 +166,7 @@ def run_pv_dm(
         tf.reshape(tf.nn.embedding_lookup(emb_doc, X_doc), [-1, 1, embedding_size]),
         tf.nn.embedding_lookup(emb_word, X_words)
     ], 1)
-    flatten = tf.reshape(emb, [-1, (2 * window_size + 1) * embedding_size])
+    flatten = tf.reshape(emb, [-1, (window_size + 1) * embedding_size])
     l = HierarchicalSoftmaxLayer(tree, word_to_index, name='hs')
     loss = -l.apply([flatten, y], training=True)
     opt = tf.train.GradientDescentOptimizer(lr)
@@ -243,11 +241,11 @@ def main():
         # pv dm
         pv_dm_train_path = run_pv_dm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=5, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=256, epoch_size=20
+            window_size=10, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=128, epoch_size=20
         )
         pv_dm_test_path = run_pv_dm(
             f'{name}_val', test, *tables, training_=False,
-            window_size=5, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=2048, epoch_size=3,
+            window_size=10, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=2048, epoch_size=3,
             train_model_path=pv_dm_train_path
         )
 
