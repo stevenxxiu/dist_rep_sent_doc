@@ -235,7 +235,7 @@ def run_log_reg(train_docs, test_docs, pv_dm_train_path, pv_dm_test_path, embedd
 
 
 def main():
-    name = 'imdb'
+    name = 'sstb_5'
     if name == 'imdb':
         train, val, test = imdb.load_data('../data/imdb_sentiment')
         tables = gen_tables(name, train, 2, 1e-3)
@@ -266,19 +266,18 @@ def main():
         # pv dm
         pv_dm_train_path = run_pv_dm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=4, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=64, epoch_size=20
+            window_size=4, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=128, epoch_size=20
         )
         pv_dm_test_path = run_pv_dm(
             f'{name}_val', test, *tables, training_=False,
-            window_size=4, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=64, epoch_size=3,
+            window_size=4, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=2048, epoch_size=5,
             train_model_path=pv_dm_train_path
         )
 
         # log reg
         run_log_reg(
-            train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=400
+            train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=100
         )
-
 
 if __name__ == '__main__':
     main()
