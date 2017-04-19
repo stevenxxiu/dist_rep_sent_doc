@@ -77,7 +77,7 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_W,
 
 def parallel_sample(docs, sample_doc, batch_size):
     # makes sure each index in the batch corresponds to a different document
-    docs_iter = iter(enumerate(docs))
+    docs_iter = iter(np.random.permutation(len(docs)))
     batches = [[0, 0, ([], [])]] * batch_size
     while True:
         cur_X_doc, cur_X_words, cur_y = [], [], []
@@ -91,8 +91,8 @@ def parallel_sample(docs, sample_doc, batch_size):
                     break
                 except IndexError:
                     try:
-                        X_doc, doc = next(docs_iter)
-                        batches[i] = [0, X_doc, sample_doc(doc)]
+                        X_doc = next(docs_iter)
+                        batches[i] = [0, X_doc, sample_doc(docs[X_doc])]
                         j, X_doc, (X_words, y) = batches[i]
                     except StopIteration:
                         break
