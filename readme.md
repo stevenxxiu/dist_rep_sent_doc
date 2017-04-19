@@ -30,6 +30,3 @@ The imdb dataset uses a neural net and a logistic regression, instead of logisti
 - Reduced window sampling for the pv-dm average model, which is not present in the paper.
 - Predicts center word instead of last word, the window sizes on the left and right are required to be the same.
 - Hierarchical softmax has no bias.
-
-## Code
-See whether using theano boolean masks are faster or multiplies by the mask are faster.

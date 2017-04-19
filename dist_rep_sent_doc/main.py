@@ -1,10 +1,8 @@
 import csv
 import datetime
 import os
-import threading
 import uuid
 from collections import Counter
-from contextlib import suppress
 
 import joblib
 import numpy as np
@@ -77,58 +75,46 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_W,
     saver.save(sess, os.path.join(path, 'model.ckpt'))
 
 
-def load_and_enqueue(
-    docs, sample_doc, enqueue_multiple, batch_size, sess,
-    queue, X_doc_input, X_words_input, y_input,
-    batch_size_queue, batch_size_input
-):
-    # ensures each index in the batch corresponds to a different document
-    enqueue_many_op = queue.enqueue_many([X_doc_input, X_words_input, y_input])
-    batch_size_enqueue_many_op = batch_size_queue.enqueue_many([batch_size_input])
-    p = iter(np.random.permutation(len(docs)))
-    batch = []
+def parallel_sample(docs, sample_doc, batch_size):
+    # makes sure each index in the batch corresponds to a different document
+    docs_iter = iter(enumerate(docs))
+    batches = [[0, 0, ([], [])]] * batch_size
     while True:
-        X_doc, X_words, y, batch_size_ = [], [], [], []
-        for i in range(enqueue_multiple):
-            # try fill batch up to batch_size
-            for j in range(batch_size - len(batch)):
-                with suppress(StopIteration):
-                    k = next(p)
-                    batch.append((k, sample_doc(docs[k])))
-            # try to get a sample from each document in batch
-            batch_ = []
-            for j, sample_doc_iter in batch:
-                with suppress(StopIteration):
-                    X_words_, y_ = next(sample_doc_iter)
-                    X_doc.append(j)
-                    X_words.append(X_words_)
-                    y.append(y_)
-                    batch_.append((j, sample_doc_iter))
-            batch = batch_
-            # update batch size queue with # of different documents we managed to get from
-            batch_size_.append(len(batch))
-        if not batch:
+        cur_X_doc, cur_X_words, cur_y = [], [], []
+        for i, (j, X_doc, (X_words, y)) in enumerate(batches):
+            while True:
+                try:
+                    cur_X_words.append(X_words[j])
+                    cur_y.append(y[j])
+                    cur_X_doc.append(X_doc)
+                    batches[i][0] += 1
+                    break
+                except IndexError:
+                    try:
+                        X_doc, doc = next(docs_iter)
+                        batches[i] = [0, X_doc, sample_doc(doc)]
+                        j, X_doc, (X_words, y) = batches[i]
+                    except StopIteration:
+                        break
+        if not cur_y:
             break
-        sess.run(enqueue_many_op, feed_dict={X_doc_input: X_doc, X_words_input: X_words, y_input: y})
-        sess.run(batch_size_enqueue_many_op, feed_dict={batch_size_input: batch_size_})
-    sess.run(queue.close())
-    sess.run(batch_size_queue.close())
+        yield cur_X_doc, cur_X_words, cur_y
+
+
+def rolling_window(a, window):
+    shape = a.shape[:-1] + (a.shape[-1] - window + 1, window)
+    strides = a.strides + (a.strides[-1],)
+    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 
 def sample_doc_pv_dm(doc, word_to_prob, word_to_index, window_size):
     # remove infrequent words & sample frequent words
-    doc = [
-        word for word in doc[1] if
-        word in word_to_index and np.random.rand() < word_to_prob[word]
-    ]
-    for k, word in enumerate(doc):
-        # window_size before word and window_size after word
-        before = doc[max(k - window_size, 0):k]
-        before = (window_size - len(before)) * ['\0'] + before
-        after = doc[k + 1:min(k + 1 + window_size, len(doc))]
-        after = after + (window_size - len(after)) * ['\0']
-        window = before + after
-        yield [word_to_index[word_] for word_ in window], word_to_index[word]
+    indexes = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
+    probs = np.array([word_to_prob[word] for word in doc[1] if word in word_to_index])
+    indexes = indexes[np.random.binomial(1, p=probs).astype(np.bool)]
+    padded = np.pad(indexes, window_size, 'constant', constant_values=word_to_index['\0'])
+    rolled = rolling_window(padded, 2 * window_size + 1)
+    return np.delete(rolled, window_size, axis=1), indexes
 
 
 # @memory.cache(ignore=['docs', 'word_to_freq', 'word_to_index', 'tree', 'word_to_prob'])
@@ -136,27 +122,10 @@ def run_pv_dm(
     name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, window_size, embedding_size, cur_lr, min_lr,
     batch_size, epoch_size, train_model_path=None
 ):
-    # queue per epoch since we cannot reset queues
-    X_doc_input = tf.placeholder(tf.int32, [None])
-    X_words_input = tf.placeholder(tf.int32, [None, 2 * window_size])
-    y_input = tf.placeholder(tf.int32, [None])
-    batch_size_input = tf.placeholder(tf.int32, [None])
-    enqueue_multiple = 8
-    queues, batch_size_queues = [], []
-    for i in range(epoch_size):
-        queues.append(tf.FIFOQueue(
-            enqueue_multiple * batch_size, [var.dtype for var in [X_doc_input, X_words_input, y_input]],
-            shapes=[var.shape[1:] for var in [X_doc_input, X_words_input, y_input]]
-        ))
-        batch_size_queues.append(tf.FIFOQueue(
-            enqueue_multiple, [var.dtype for var in [batch_size_input]],
-            shapes=[var.shape[1:] for var in [batch_size_input]]
-        ))
-
     # network
-    cur_epoch = tf.placeholder(tf.int32, [])
-    batch_size_ = tf.QueueBase.from_list(cur_epoch, batch_size_queues).dequeue()
-    X_doc, X_words, y = tf.QueueBase.from_list(cur_epoch, queues).dequeue_up_to(batch_size_)
+    X_doc = tf.placeholder(tf.int32, [None])
+    X_words = tf.placeholder(tf.int32, [None, 2 * window_size])
+    y = tf.placeholder(tf.int32, [None])
     lr = tf.placeholder(tf.float32, [])
     emb_doc = tf.Variable(tf.random_uniform(
         [len(docs), embedding_size], -0.5 / embedding_size, 0.5 / embedding_size
@@ -191,17 +160,10 @@ def run_pv_dm(
         lr_delta = (cur_lr - min_lr) / epoch_size
         print(datetime.datetime.now(), 'started training')
         for i in range(epoch_size):
-            threading.Thread(target=load_and_enqueue, args=(
-                docs, lambda doc: sample_doc_pv_dm(doc, word_to_prob, word_to_index, window_size),
-                enqueue_multiple, batch_size, sess,
-                queues[i], X_doc_input, X_words_input, y_input,
-                batch_size_queues[i], batch_size_input
-            )).start()
-            while True:
-                try:
-                    sess.run(train_op, feed_dict={lr: cur_lr, cur_epoch: i})
-                except tf.errors.OutOfRangeError:
-                    break
+            for X_doc_, X_words_, y_ in parallel_sample(
+                docs, lambda doc: sample_doc_pv_dm(doc, word_to_prob, word_to_index, window_size), batch_size
+            ):
+                sess.run(train_op, feed_dict={X_doc: X_doc_, X_words: X_words_, y: y_, lr: cur_lr})
             print(datetime.datetime.now(), f'finished epoch {i}')
             if training_:
                 cur_lr -= lr_delta
@@ -235,7 +197,7 @@ def run_log_reg(train_docs, test_docs, pv_dm_train_path, pv_dm_test_path, embedd
 
 
 def main():
-    name = 'sstb_5'
+    name = 'imdb'
     if name == 'imdb':
         train, val, test = imdb.load_data('../data/imdb_sentiment')
         tables = gen_tables(name, train, 2, 1e-3)

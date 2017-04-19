@@ -76,7 +76,7 @@ class HierarchicalSoftmaxLayer(base._Layer):
                 tf.tile(tf.reshape(tf.range(tf.shape(input_)[0]), [-1, 1]), [1, self.shape[1]]), [-1]
             ), masks)
             return tf.reduce_sum(-tf.nn.softplus(
-                -signs * tf.reduce_sum(tf.gather(self.W, nodes) * tf.gather(input_, indices), 1)
+                -signs * tf.reduce_sum(tf.nn.embedding_lookup(self.W, nodes) * tf.gather(input_, indices), 1)
             ))
         else:
             node_outputs = tf.matmul(inputs, tf.transpose(self.W))
