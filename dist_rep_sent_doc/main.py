@@ -78,27 +78,33 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_W,
 def parallel_sample(docs, sample_doc, batch_size):
     # makes sure each index in the batch corresponds to a different document
     docs_iter = iter(enumerate(docs))
-    batches = [[0, 0, ([], [])]] * batch_size
+    batch = []
     while True:
-        cur_X_doc, cur_X_words, cur_y = [], [], []
-        for i, (j, X_doc, (X_words, y)) in enumerate(batches):
-            while True:
-                try:
-                    cur_X_words.append(X_words[j])
-                    cur_y.append(y[j])
-                    cur_X_doc.append(X_doc)
-                    batches[i][0] += 1
-                    break
-                except IndexError:
-                    try:
-                        X_doc, doc = next(docs_iter)
-                        batches[i] = [0, X_doc, sample_doc(doc)]
-                        j, X_doc, (X_words, y) = batches[i]
-                    except StopIteration:
-                        break
-        if not cur_y:
+        # fill batch up to size
+        for i in range(batch_size - len(batch)):
+            try:
+                X_doc, doc = next(docs_iter)
+                batch.append((X_doc, *sample_doc(doc)))
+            except StopIteration:
+                break
+        if not batch:
             break
-        yield cur_X_doc, cur_X_words, cur_y
+        # use numpy to concatenate and get remaining batch
+        n = min(len(y) for X_doc, X_words, y in batch)
+        batch_X_doc, batch_X_words, batch_y = [], [], []
+        batch_ = []
+        for i, (X_doc, X_words, y) in enumerate(batch):
+            batch_X_doc.append(X_doc)
+            batch_X_words.append(X_words[:n])
+            batch_y.append(y[:n])
+            if len(y) > n:
+                batch_.append((X_doc, X_words[n:], y[n:]))
+        batch = batch_
+        batch_X_doc = np.array(batch_X_doc)
+        batch_X_words = np.array(batch_X_words)
+        batch_y = np.array(batch_y)
+        for i in range(n):
+            yield batch_X_doc, batch_X_words[:, i, :], batch_y[:, i]
 
 
 def rolling_window(a, window):
