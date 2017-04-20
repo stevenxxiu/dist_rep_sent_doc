@@ -162,10 +162,7 @@ def run_pv_dm(
             ):
                 sess.run(train_op, feed_dict={X_doc: X_doc_, X_words: X_words_, y: y_, lr: cur_lr})
             print(datetime.datetime.now(), f'finished epoch {i}')
-            if training_:
-                cur_lr -= lr_delta
-            else:
-                cur_lr = ((cur_lr - min_lr) / (epoch_size - i)) + min_lr
+            cur_lr -= lr_delta
 
         # save
         path = os.path.join('__cache__', 'tf', f'{name}-{uuid.uuid4()}')
