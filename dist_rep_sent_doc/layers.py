@@ -26,8 +26,8 @@ class HierarchicalSoftmaxLayer(base._Layer):
             np.zeros(self.shape, dtype=np.int32), \
             np.zeros(self.shape, dtype=np.float32), \
             np.zeros(self.shape, dtype=np.bool)
-        for i in range(len(node_to_path)):
-            for j, (node, sign) in enumerate(node_to_path[i]):
+        for i, path in node_to_path.items():
+            for j, (node, sign) in enumerate(path):
                 nodes[i, j] = node
                 signs[i, j] = sign
                 masks[i, j] = True

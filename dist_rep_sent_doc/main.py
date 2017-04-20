@@ -19,28 +19,22 @@ memory = joblib.Memory('__cache__', verbose=0)
 
 @memory.cache(ignore=['docs'])
 def gen_tables(name, docs, vocab_min_freq, sample):
-    total_count = 0
-
     # map word to counts and indexes, infrequent words are removed entirely
     word_to_freq = {}
-    words = []
     for word, count in Counter(word for doc in docs for word in doc[1]).items():
         if count >= vocab_min_freq:
             word_to_freq[word] = count
-            words.append(word)
-            total_count += count
-    words.append('\0')
-    words.sort(key=lambda word_: word_to_freq.get(word_, 1), reverse=True)
-
     word_to_index = {}
-    for i, word in enumerate(words):
-        word_to_index[word] = i
+    for word in word_to_freq:
+        word_to_index[word] = len(word_to_index)
+    word_to_index['\0'] = len(word_to_index)
 
     # get huffman tree
     tree = build_huffman(word_to_freq)
 
     # get word sub-sampling probabilities
     word_to_prob = {}
+    total_count = sum(word_to_freq.values())
     for word, count in word_to_freq.items():
         ratio = sample / (count / total_count) if count > 0 else 1
         word_to_prob[word] = min(np.sqrt(ratio), 1)
@@ -117,7 +111,6 @@ def sample_doc_pv_dm(doc, word_to_prob, word_to_index, window_size):
     return np.delete(rolled, window_size, axis=1), indexes
 
 
-# @memory.cache(ignore=['docs', 'word_to_freq', 'word_to_index', 'tree', 'word_to_prob'])
 def run_pv_dm(
     name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, window_size, embedding_size, cur_lr, min_lr,
     batch_size, epoch_size, train_model_path=None
