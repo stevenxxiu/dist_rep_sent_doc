@@ -139,12 +139,16 @@ def run_pv_dm(
     ], 1)
     flatten = tf.reshape(emb, [-1, (2 * window_size + 1) * embedding_size])
     l = HierarchicalSoftmaxLayer(tree, word_to_index, name='hs')
-    loss = -l.apply([flatten, y], training=True)
+    loss, hs_scale = l.apply([flatten, y], training=True)
     opt = tf.train.GradientDescentOptimizer(lr)
     grads_and_vars = opt.compute_gradients(loss)
     if not training_:
         # only train document embeddings
         grads_and_vars = [(grad, var) for grad, var in grads_and_vars if var == emb_doc]
+    grads_and_vars = [
+        (tf.IndexedSlices(hs_scale * grad.values, grad.indices), var) if var == l.W else (grad, var)
+        for grad, var in grads_and_vars
+    ]
     train_op = opt.apply_gradients(grads_and_vars)
 
     # run
@@ -205,7 +209,7 @@ def main():
         # pv dm
         pv_dm_train_path = run_pv_dm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=5, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=128, epoch_size=20
+            window_size=5, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=1024, epoch_size=20
         )
         pv_dm_test_path = run_pv_dm(
             f'{name}_val', test, *tables, training_=False,
@@ -228,7 +232,7 @@ def main():
         # pv dm
         pv_dm_train_path = run_pv_dm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=4, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=128, epoch_size=20
+            window_size=4, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=1024, epoch_size=20
         )
         pv_dm_test_path = run_pv_dm(
             f'{name}_val', test, *tables, training_=False,

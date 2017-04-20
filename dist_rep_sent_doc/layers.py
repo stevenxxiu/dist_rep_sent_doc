@@ -75,9 +75,11 @@ class HierarchicalSoftmaxLayer(base._Layer):
             indices = tf.boolean_mask(tf.reshape(
                 tf.tile(tf.reshape(tf.range(tf.shape(input_)[0]), [-1, 1]), [1, self.shape[1]]), [-1]
             ), masks)
-            return tf.reduce_sum(-tf.nn.softplus(
-                -signs * tf.reduce_sum(tf.nn.embedding_lookup(self.W, nodes) * tf.gather(input_, indices), 1)
-            ))
+            node_indices = tf.unique(nodes)[1]
+            node_counts = tf.gather(tf.bincount(node_indices), node_indices)
+            return -tf.reduce_sum(-tf.nn.softplus(-signs * tf.reduce_sum(
+                tf.gather(self.W, nodes) * tf.gather(input_, indices), 1
+            ))), 1 / tf.reshape(tf.cast(node_counts, tf.float32), [-1, 1])
         else:
             node_outputs = tf.matmul(inputs, tf.transpose(self.W))
             return tf.transpose(tf.sparse_tensor_dense_matmul(self.output_index, tf.transpose(

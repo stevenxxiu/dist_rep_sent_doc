@@ -48,7 +48,7 @@ class TestHierarchicalSoftmaxLayer(unittest.TestCase):
                 X: np.array([[.16, .17], [.18, .19], [.20, .21]]),
                 y: [2, 1, 0],
             })
-            assert_array_almost_equal(res, np.array([
+            assert_array_almost_equal(res[0], -np.array([
                 (
                     np.log(1 - expit(np.dot([.16, .17], [.01, .02]))) +
                     np.log(expit(np.dot([.16, .17], [.03, .04]))) +
