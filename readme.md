@@ -13,7 +13,7 @@ The random initializations of the word embedding and softmax weights are not spe
 
 Hierarchical softmax usually has a bias, it is not described in the `word2vec` paper, but there is no bias in the `word2vec` paper, so we suppose this.
 
-The learning rate/gradient descent method is not specified. The objective is not specified, although from the previous word embeddings paragraph it is probably to maximize the average log probability. Training and inference learning rates can be quite different.
+The learning rate/gradient descent method is not specified. The objective is not specified, although from the previous word embeddings paragraph it is probably to maximize the average log probability. Training and inference learning rates can be quite different. It makes more sense for the gradients to not be means, as the input variables are rarely the same.
 
 It is not described how unknown words during validation are handled.
 
