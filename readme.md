@@ -13,7 +13,7 @@ The random initializations of the word embedding and softmax weights are not spe
 
 Hierarchical softmax usually has a bias, it is not described in the `word2vec` paper, but there is no bias in the `word2vec` paper, so we suppose this.
 
-The learning rate/gradient descent method is not specified. The objective is not specified, although from the previous word embeddings paragraph it is probably to maximize the average log probability. Training and inference learning rates can be quite different. It makes more sense for the gradients to not be means, as the input variables are rarely the same.
+The learning rate/gradient descent method is not specified. The objective is not specified, although from the previous word embeddings paragraph it is probably to maximize the total log probability. Training and inference learning rates can be quite different. It makes more sense for the gradients to not be means, as the parameters used are rarely the same (the purpose of having mean gradients is so that different batch sizes give similar gradients, which makes sense if the same parameters are used per instance).
 
 It is not described how unknown words during validation are handled.
 
@@ -30,3 +30,4 @@ The imdb dataset uses a neural net and a logistic regression, instead of logisti
 - Reduced window sampling for the pv-dm average model, which is not present in the paper.
 - Predicts center word instead of last word, the window sizes on the left and right are required to be the same.
 - Hierarchical softmax has no bias.
+- Shuffling during training is by shuffling all documents first, then training each document from left to right, and ensuring that each batch contains windows from different documents.

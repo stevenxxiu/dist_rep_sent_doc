@@ -43,7 +43,7 @@ def gen_tables(name, docs, vocab_min_freq, sample):
     word_to_prob = {}
     for word, count in word_to_freq.items():
         ratio = sample / (count / total_count) if count > 0 else 1
-        word_to_prob[word] = min(np.sqrt(ratio) + ratio, 1)
+        word_to_prob[word] = min(np.sqrt(ratio), 1)
 
     return word_to_freq, word_to_index, tree, word_to_prob
 
