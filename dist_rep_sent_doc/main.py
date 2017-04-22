@@ -69,48 +69,13 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_W,
     saver.save(sess, os.path.join(path, 'model.ckpt'))
 
 
-def parallel_sample(docs, sample_doc, batch_size):
-    # makes sure each index in the batch corresponds to a different document
-    docs_iter = iter(np.random.permutation(len(docs)))
-    batches = [[0, 0, ([], [])]] * batch_size
-    while True:
-        cur_X_doc, cur_X_words, cur_y = [], [], []
-        for i, (j, X_doc, (X_words, y)) in enumerate(batches):
-            while True:
-                try:
-                    cur_X_words.append(X_words[j])
-                    cur_y.append(y[j])
-                    cur_X_doc.append(X_doc)
-                    batches[i][0] += 1
-                    break
-                except IndexError:
-                    try:
-                        X_doc = next(docs_iter)
-                        batches[i] = [0, X_doc, sample_doc(docs[X_doc])]
-                        j, X_doc, (X_words, y) = batches[i]
-                    except StopIteration:
-                        break
-        if not cur_y:
-            break
-        yield cur_X_doc, cur_X_words, cur_y
-
-
 def rolling_window(a, window):
     shape = a.shape[:-1] + (a.shape[-1] - window + 1, window)
     strides = a.strides + (a.strides[-1],)
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 
-def sample_doc_pv_dm(doc, word_to_prob, word_to_index, window_size):
-    # remove infrequent words & sample frequent words
-    indexes = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
-    probs = np.array([word_to_prob[word] for word in doc[1] if word in word_to_index])
-    indexes = indexes[np.random.binomial(1, p=probs).astype(np.bool)]
-    padded = np.pad(indexes, window_size, 'constant', constant_values=word_to_index['\0'])
-    rolled = rolling_window(padded, 2 * window_size + 1)
-    return np.delete(rolled, window_size, axis=1), indexes
-
-
+# noinspection PyTypeChecker
 def run_pv_dm(
     name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, window_size, embedding_size, cur_lr, min_lr,
     batch_size, epoch_size, train_model_path=None
@@ -157,10 +122,24 @@ def run_pv_dm(
         lr_delta = (cur_lr - min_lr) / epoch_size
         print(datetime.datetime.now(), 'started training')
         for i in range(epoch_size):
-            for X_doc_, X_words_, y_ in parallel_sample(
-                docs, lambda doc: sample_doc_pv_dm(doc, word_to_prob, word_to_index, window_size), batch_size
-            ):
-                sess.run(train_op, feed_dict={X_doc: X_doc_, X_words: X_words_, y: y_, lr: cur_lr})
+            X_doc_, X_words_, y_ = [], [], []
+            for j, doc in enumerate(docs):
+                # remove infrequent words & sample frequent words
+                index = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
+                probs = np.array([word_to_prob[word] for word in doc[1] if word in word_to_index])
+                index = index[np.random.binomial(1, p=probs).astype(np.bool)]
+                padded = np.pad(index, window_size, 'constant', constant_values=word_to_index['\0'])
+                rolled = rolling_window(padded, 2 * window_size + 1)
+                X_doc_.append(np.repeat(j, len(index)))
+                y_.append(index)
+                X_words_.append(np.delete(rolled, window_size, axis=1))
+            X_doc_ = np.concatenate(X_doc_)
+            X_words_ = np.vstack(X_words_)
+            y_ = np.concatenate(y_)
+            p = np.random.permutation(len(y_))
+            for j in range(0, len(y_), batch_size):
+                k = p[j:j + batch_size]
+                sess.run(train_op, feed_dict={X_doc: X_doc_[k], X_words: X_words_[k], y: y_[k], lr: cur_lr})
             print(datetime.datetime.now(), f'finished epoch {i}')
             cur_lr -= lr_delta
 
