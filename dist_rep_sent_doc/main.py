@@ -145,10 +145,12 @@ def run_pv_dm(
     if not training_:
         # only train document embeddings
         grads_and_vars = [(grad, var) for grad, var in grads_and_vars if var == emb_doc]
-    grads_and_vars = [
-        (tf.IndexedSlices(hs_scale * grad.values, grad.indices), var) if var == l.W else (grad, var)
-        for grad, var in grads_and_vars
-    ]
+    for i, (grad, var) in enumerate(grads_and_vars):
+        if var == emb_doc or var == l.W:
+            # use average gradients for parameters which repeat within the batch
+            indices = tf.unique(grad.indices)[1]
+            counts = tf.cast(tf.gather(tf.bincount(indices), indices), tf.float32)
+            grads_and_vars[i] = tf.IndexedSlices(grad.values / tf.reshape(counts, [-1, 1]), grad.indices), var
     train_op = opt.apply_gradients(grads_and_vars)
 
     # run
