@@ -55,7 +55,7 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_W,
             if emb == emb_doc:
                 for doc in docs:
                     writer.writerow([' '.join(doc[1]), 1])
-            elif emb == emb_word:
+            elif emb_word and emb == emb_word:
                 words = len(word_to_index) * [None]
                 for word, i in word_to_index.items():
                     words[i] = word
@@ -65,34 +65,38 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_W,
     projector.visualize_embeddings(summary_writer, config)
 
     # save model
-    saver = tf.train.Saver({'emb_word': emb_word, 'emb_doc': emb_doc, 'hs_W': hs_W})
+    saver = tf.train.Saver(
+        {'emb_word': emb_word, 'emb_doc': emb_doc, 'hs_W': hs_W} if emb_word else
+        {'emb_doc': emb_doc, 'hs_W': hs_W}
+    )
     saver.save(sess, os.path.join(path, 'model.ckpt'))
 
 
 def parallel_sample(docs, sample_doc, batch_size):
     # makes sure each index in the batch corresponds to a different document
     docs_iter = iter(np.random.permutation(len(docs)))
-    batches = [[0, 0, ([], [])]] * batch_size
+    batches = [[0, 0, ([],)]] * batch_size
     while True:
-        cur_X_doc, cur_X_words, cur_y = [], [], []
-        for i, (j, X_doc, (X_words, y)) in enumerate(batches):
+        cur_X_doc, cur_X_other = [], []
+        for i, (j, X_doc, X_other) in enumerate(batches):
             while True:
                 try:
-                    cur_X_words.append(X_words[j])
-                    cur_y.append(y[j])
+                    for k, X_other_ in enumerate(X_other):
+                        if len(cur_X_other) <= k:
+                            cur_X_other.append([])
+                        cur_X_other[k].append(X_other_[j])
                     cur_X_doc.append(X_doc)
-                    batches[i][0] += 1
+                    batches[i][0] = j + 1
                     break
                 except IndexError:
                     try:
                         X_doc = next(docs_iter)
-                        batches[i] = [0, X_doc, sample_doc(docs[X_doc])]
-                        j, X_doc, (X_words, y) = batches[i]
+                        batches[i] = [j, X_doc, X_other] = [0, X_doc, sample_doc(docs[X_doc])]
                     except StopIteration:
                         break
-        if not cur_y:
+        if not cur_X_doc:
             break
-        yield cur_X_doc, cur_X_words, cur_y
+        yield (cur_X_doc, *cur_X_other)
 
 
 def rolling_window(a, window):
@@ -101,17 +105,7 @@ def rolling_window(a, window):
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 
-def sample_doc_pv_dm(doc, word_to_prob, word_to_index, window_size):
-    # remove infrequent words & sample frequent words
-    indexes = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
-    probs = np.array([word_to_prob[word] for word in doc[1] if word in word_to_index])
-    indexes = indexes[np.random.binomial(1, p=probs).astype(np.bool)]
-    padded = np.pad(indexes, window_size, 'constant', constant_values=word_to_index['\0'])
-    rolled = rolling_window(padded, 2 * window_size + 1)
-    return np.delete(rolled, window_size, axis=1), indexes
-
-
-def run_pv_dm(
+def run_pvdm(
     name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, window_size, embedding_size, cur_lr, min_lr,
     batch_size, epoch_size, train_model_path=None
 ):
@@ -144,6 +138,16 @@ def run_pv_dm(
     ]
     train_op = opt.apply_gradients(grads_and_vars)
 
+    # sample
+    def sample(doc):
+        # remove infrequent words & sample frequent words
+        indexes = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
+        probs = np.array([word_to_prob[word] for word in doc[1] if word in word_to_index])
+        indexes = indexes[np.random.binomial(1, p=probs).astype(np.bool)]
+        padded = np.pad(indexes, window_size, 'constant', constant_values=word_to_index['\0'])
+        rolled = rolling_window(padded, 2 * window_size + 1)
+        return np.delete(rolled, window_size, axis=1), indexes
+
     # run
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -157,34 +161,96 @@ def run_pv_dm(
         lr_delta = (cur_lr - min_lr) / epoch_size
         print(datetime.datetime.now(), 'started training')
         for i in range(epoch_size):
-            for X_doc_, X_words_, y_ in parallel_sample(
-                docs, lambda doc: sample_doc_pv_dm(doc, word_to_prob, word_to_index, window_size), batch_size
-            ):
+            for X_doc_, X_words_, y_ in parallel_sample(docs, sample, batch_size):
                 sess.run(train_op, feed_dict={X_doc: X_doc_, X_words: X_words_, y: y_, lr: cur_lr})
             print(datetime.datetime.now(), f'finished epoch {i}')
             cur_lr -= lr_delta
 
         # save
-        path = os.path.join('__cache__', 'tf', f'{name}-{uuid.uuid4()}')
+        path = os.path.join('__cache__', 'tf', f'pvdm-{name}-{uuid.uuid4()}')
         os.makedirs(path)
         save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, l.W, sess)
         return path
 
 
-def run_log_reg(train_docs, test_docs, pv_dm_train_path, pv_dm_test_path, embedding_size):
+# noinspection PyTypeChecker
+def run_dbow(
+    name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, embedding_size, cur_lr, min_lr,
+    batch_size, epoch_size, train_model_path=None
+):
+    # network
+    X_doc = tf.placeholder(tf.int32, [None])
+    y = tf.placeholder(tf.int32, [None])
+    lr = tf.placeholder(tf.float32, [])
+    emb_doc = tf.Variable(tf.random_uniform(
+        [len(docs), embedding_size], -0.5 / embedding_size, 0.5 / embedding_size
+    ))
+    emb = tf.nn.embedding_lookup(emb_doc, X_doc)
+    l = HierarchicalSoftmaxLayer(tree, word_to_index, name='hs')
+    loss = -l.apply([emb, y], training=True)
+    opt = tf.train.GradientDescentOptimizer(lr)
+    grads_and_vars = opt.compute_gradients(loss)
+    if not training_:
+        # only train document embeddings
+        grads_and_vars = [(grad, var) for grad, var in grads_and_vars if var == emb_doc]
+    grads_and_vars = [
+        (tf.IndexedSlices(tf.clip_by_value(grad.values, -10, 10), grad.indices), var)
+        for grad, var in grads_and_vars
+    ]
+    train_op = opt.apply_gradients(grads_and_vars)
+
+    # sample
+    def sample(doc):
+        # remove infrequent words
+        indexes = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
+        return indexes,
+
+    # run
     with tf.Session() as sess:
-        pv_dm_train = tf.Variable(tf.zeros([len(train_docs), embedding_size]))
-        pv_dm_test = tf.Variable(tf.zeros([len(test_docs), embedding_size]))
-        tf.train.Saver({'emb_doc': pv_dm_train}).restore(sess, os.path.join(pv_dm_train_path, 'model.ckpt'))
-        tf.train.Saver({'emb_doc': pv_dm_test}).restore(sess, os.path.join(pv_dm_test_path, 'model.ckpt'))
+        sess.run(tf.global_variables_initializer())
+
+        # load trained model if we are doing inference
+        if not training_:
+            saver = tf.train.Saver({'hs_W': l.W})
+            saver.restore(sess, os.path.join(train_model_path, 'model.ckpt'))
+
+        # train
+        lr_delta = (cur_lr - min_lr) / epoch_size
+        print(datetime.datetime.now(), 'started training')
+        for i in range(epoch_size):
+            for X_doc_, y_ in parallel_sample(docs, sample, batch_size):
+                sess.run(train_op, feed_dict={X_doc: X_doc_, y: y_, lr: cur_lr})
+            print(datetime.datetime.now(), f'finished epoch {i}')
+            cur_lr -= lr_delta
+
+        # save
+        path = os.path.join('__cache__', 'tf', f'dbow-{name}-{uuid.uuid4()}')
+        os.makedirs(path)
+        save_model(path, docs, word_to_index, word_to_freq, emb_doc, None, l.W, sess)
+        return path
+
+
+def run_log_reg(train_docs, test_docs, pvdm_train_path, pvdm_test_path, dbow_train_path, dbow_test_path, embedding_size):
+    with tf.Session() as sess:
+        pvdm_train = tf.Variable(tf.zeros([len(train_docs), embedding_size]))
+        pvdm_test = tf.Variable(tf.zeros([len(test_docs), embedding_size]))
+        tf.train.Saver({'emb_doc': pvdm_train}).restore(sess, os.path.join(pvdm_train_path, 'model.ckpt'))
+        tf.train.Saver({'emb_doc': pvdm_test}).restore(sess, os.path.join(pvdm_test_path, 'model.ckpt'))
+
+        dbow_train = tf.Variable(tf.zeros([len(train_docs), embedding_size]))
+        dbow_test = tf.Variable(tf.zeros([len(test_docs), embedding_size]))
+        tf.train.Saver({'emb_doc': dbow_train}).restore(sess, os.path.join(dbow_train_path, 'model.ckpt'))
+        tf.train.Saver({'emb_doc': dbow_test}).restore(sess, os.path.join(dbow_test_path, 'model.ckpt'))
 
         i = [i for i, doc in enumerate(train_docs) if doc[0] is not None]
-        train_X = pv_dm_train.eval(sess)[i]
+        # train_X = pvdm_train.eval(sess)[i]
+        train_X = dbow_train.eval(sess)[i]
         train_y = np.array([doc[0] for doc in train_docs], dtype=np.float32)[i]
         logit = sm.Logit(train_y, train_X)
         predictor = logit.fit(disp=0)
 
-        test_X = pv_dm_test.eval(sess)
+        # test_X = pvdm_test.eval(sess)
+        test_X = dbow_test.eval(sess)
         test_pred = predictor.predict(test_X)
         corrects = sum(np.rint(test_pred) == [doc[0] for doc in test_docs])
         print(f'error rate: {(len(test_pred) - corrects) / len(test_pred)}')
@@ -196,20 +262,33 @@ def main():
         train, val, test = imdb.load_data('../data/imdb_sentiment')
         tables = gen_tables(name, train, 2, 1e-3)
 
-        # pv dm
-        pv_dm_train_path = run_pv_dm(
+        # pvdm
+        # pvdm_train_path = run_pvdm(
+        #     f'{name}_train', train, *tables, training_=True,
+        #     window_size=5, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=512, epoch_size=20
+        # )
+        # pvdm_test_path = run_pvdm(
+        #     f'{name}_val', test, *tables, training_=False,
+        #     window_size=5, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=2048, epoch_size=5,
+        #     train_model_path=pvdm_train_path
+        # )
+        pvdm_train_path = '__cache__/tf/pvdm-imdb_train-fdda2360-0c52-4302-968e-bf5ade560fd8'
+        pvdm_test_path = '__cache__/tf/pvdm-imdb_val-2e96199c-8af7-46e1-bd8f-b70f500d0f32'
+
+        # dbow
+        dbow_train_path = run_dbow(
             f'{name}_train', train, *tables, training_=True,
-            window_size=5, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=512, epoch_size=20
+            embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=512, epoch_size=20
         )
-        pv_dm_test_path = run_pv_dm(
+        dbow_test_path = run_dbow(
             f'{name}_val', test, *tables, training_=False,
-            window_size=5, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=2048, epoch_size=5,
-            train_model_path=pv_dm_train_path
+            embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=2048, epoch_size=5,
+            train_model_path=dbow_train_path
         )
 
         # log reg
         run_log_reg(
-            train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=100
+            train, test, pvdm_train_path, pvdm_test_path, dbow_train_path, dbow_test_path, embedding_size=100
         )
 
     elif name in ('sstb_2', 'sstb_5'):
@@ -219,20 +298,20 @@ def main():
         )
         tables = gen_tables(name, train, 2, 1e-5)
 
-        # pv dm
-        pv_dm_train_path = run_pv_dm(
+        # pvdm
+        pvdm_train_path = run_pvdm(
             f'{name}_train', train, *tables, training_=True,
             window_size=4, embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=512, epoch_size=20
         )
-        pv_dm_test_path = run_pv_dm(
+        pvdm_test_path = run_pvdm(
             f'{name}_val', test, *tables, training_=False,
             window_size=4, embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=2048, epoch_size=5,
-            train_model_path=pv_dm_train_path
+            train_model_path=pvdm_train_path
         )
 
         # log reg
         run_log_reg(
-            train, test, pv_dm_train_path, pv_dm_test_path, embedding_size=100
+            train, test, pvdm_train_path, pvdm_test_path, embedding_size=100
         )
 
 if __name__ == '__main__':
