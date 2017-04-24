@@ -6,8 +6,8 @@ from collections import Counter
 
 import joblib
 import numpy as np
-import statsmodels.api as sm
 import tensorflow as tf
+from tensorflow.python.ops import init_ops
 from tensorflow.contrib.tensorboard.plugins import projector
 
 from dist_rep_sent_doc.data import imdb, sstb
@@ -214,32 +214,45 @@ def run_dbow(
         return path
 
 
-def run_log_reg(train_docs, test_docs, pvdm_train_path, pvdm_test_path, dbow_train_path, dbow_test_path, embedding_size):
+def load_docvecs(train, test, pvdm_train_path, pvdm_test_path, dbow_train_path, dbow_test_path):
+    pvdm_train, pvdm_test = tf.Variable(0., validate_shape=False), tf.Variable(0., validate_shape=False)
+    dbow_train, dbow_test = tf.Variable(0., validate_shape=False), tf.Variable(0., validate_shape=False)
     with tf.Session() as sess:
-        pvdm_train = tf.Variable(tf.zeros([len(train_docs), embedding_size]))
-        pvdm_test = tf.Variable(tf.zeros([len(test_docs), embedding_size]))
         tf.train.Saver({'emb_doc': pvdm_train}).restore(sess, os.path.join(pvdm_train_path, 'model.ckpt'))
         tf.train.Saver({'emb_doc': pvdm_test}).restore(sess, os.path.join(pvdm_test_path, 'model.ckpt'))
-
-        dbow_train = tf.Variable(tf.zeros([len(train_docs), embedding_size]))
-        dbow_test = tf.Variable(tf.zeros([len(test_docs), embedding_size]))
         tf.train.Saver({'emb_doc': dbow_train}).restore(sess, os.path.join(dbow_train_path, 'model.ckpt'))
         tf.train.Saver({'emb_doc': dbow_test}).restore(sess, os.path.join(dbow_test_path, 'model.ckpt'))
-
-        i = [i for i, doc in enumerate(train_docs) if doc[0] is not None]
-        # train_X = pvdm_train.eval(sess)[i]
-        train_X = dbow_train.eval(sess)[i]
-        train_y = np.array([doc[0] for doc in train_docs], dtype=np.float32)[i]
-        logit = sm.Logit(train_y, train_X)
-        predictor = logit.fit(disp=0)
-
-        # test_X = pvdm_test.eval(sess)
-        test_X = dbow_test.eval(sess)
-        test_pred = predictor.predict(test_X)
-        corrects = sum(np.rint(test_pred) == [doc[0] for doc in test_docs])
-        print(f'error rate: {(len(test_pred) - corrects) / len(test_pred)}')
+        i = [i for i, doc in enumerate(train) if doc[0] is not None]
+        X_train = sess.run(tf.concat([pvdm_train, dbow_train], 1))[i]
+        y_train = np.array([doc[0] for doc in train])[i]
+        X_test = sess.run(tf.concat([pvdm_test, dbow_test], 1))
+        y_test = np.array([doc[0] for doc in test])
+        return X_train, y_train, X_test, y_test
 
 
+# noinspection PyTypeChecker
+def run_nn(X_train, y_train, X_test, y_test, embedding_size, layer_sizes, batch_size, epoch_size):
+    X = tf.placeholder(tf.float32, [None, embedding_size])
+    y = tf.placeholder(tf.int32, [None])
+    dense = X
+    for layer_size in layer_sizes:
+        dense = tf.layers.dense(dense, layer_size, kernel_initializer=init_ops.glorot_uniform_initializer())
+    loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=dense, labels=y))
+    train_op = tf.train.AdadeltaOptimizer(learning_rate=50).minimize(loss)
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        for i in range(epoch_size):
+            p = np.random.permutation(len(y_train))
+            for j in range(0, len(y_train), batch_size):
+                k = p[j:j + batch_size]
+                _, batch_loss = sess.run([train_op, loss], feed_dict={X: X_train[k], y: y_train[k]})
+            print(datetime.datetime.now(), f'finished epoch {i}, batch loss: {batch_loss:.5f}')
+        y_pred = sess.run(tf.argmax(dense, axis=1), feed_dict={X: X_test})
+        corrects = sum(y_pred == y_test)
+        print(f'error rate: {(len(y_pred) - corrects) / len(y_pred)}')
+
+
+# noinspection PyTypeChecker
 def main():
     name = 'imdb'
     if name == 'imdb':
@@ -268,9 +281,10 @@ def main():
             train_model_path=dbow_train_path
         )
 
-        # log reg
-        run_log_reg(
-            train, test, pvdm_train_path, pvdm_test_path, dbow_train_path, dbow_test_path, embedding_size=100
+        # classify
+        run_nn(
+            *load_docvecs(train, test, pvdm_train_path, pvdm_test_path, dbow_train_path, dbow_test_path),
+            embedding_size=200, layer_sizes=[2], batch_size=2048, epoch_size=10
         )
 
     elif name in ('sstb_2', 'sstb_5'):
@@ -291,9 +305,21 @@ def main():
             train_model_path=pvdm_train_path
         )
 
-        # log reg
-        run_log_reg(
-            train, test, pvdm_train_path, pvdm_test_path, embedding_size=100
+        # dbow
+        dbow_train_path = run_dbow(
+            f'{name}_train', train, *tables, training_=True,
+            embedding_size=100, cur_lr=0.025, min_lr=0.001, batch_size=512, epoch_size=20
+        )
+        dbow_test_path = run_dbow(
+            f'{name}_test', test, *tables, training_=False,
+            embedding_size=100, cur_lr=0.1, min_lr=0.0001, batch_size=2048, epoch_size=5,
+            train_model_path=dbow_train_path
+        )
+
+        # classify
+        run_nn(
+            *load_docvecs(train, test, pvdm_train_path, pvdm_test_path, dbow_train_path, dbow_test_path),
+            embedding_size=200, layer_sizes=[(2 if name == 'sstb_2' else 5)], batch_size=2048, epoch_size=10
         )
 
 if __name__ == '__main__':
