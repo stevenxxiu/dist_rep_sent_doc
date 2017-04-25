@@ -141,10 +141,14 @@ def run_pvdm(
             y_ = np.concatenate(y_)
             p = np.random.permutation(len(y_))
             cur_lr = start_lr - (start_lr - end_lr) / (epoch_size - 1) * i
+            total_loss = 0
             for j in range(0, len(y_), batch_size):
                 k = p[j:j + batch_size]
-                sess.run(train_op, feed_dict={X_doc: X_doc_[k], X_words: X_words_[k], y: y_[k], lr: cur_lr})
-            print(datetime.datetime.now(), f'finished epoch {i}')
+                _, batch_loss = sess.run([train_op, loss], feed_dict={
+                    X_doc: X_doc_[k], X_words: X_words_[k], y: y_[k], lr: cur_lr
+                })
+                total_loss += batch_loss
+            print(datetime.datetime.now(), f'finished epoch {i}, loss: {total_loss / len(y_):f}')
 
         # save
         path = os.path.join('__cache__', 'tf', f'pvdm-{name}-{uuid.uuid4()}')
@@ -202,10 +206,12 @@ def run_dbow(
             y_ = np.concatenate(y_)
             p = np.random.permutation(len(y_))
             cur_lr = start_lr - (start_lr - end_lr) / (epoch_size - 1) * i
+            total_loss = 0
             for j in range(0, len(y_), batch_size):
                 k = p[j:j + batch_size]
-                sess.run(train_op, feed_dict={X_doc: X_doc_[k], y: y_[k], lr: cur_lr})
-            print(datetime.datetime.now(), f'finished epoch {i}')
+                _, batch_loss = sess.run([train_op, loss], feed_dict={X_doc: X_doc_[k], y: y_[k], lr: cur_lr})
+                total_loss += batch_loss
+            print(datetime.datetime.now(), f'finished epoch {i}, loss: {total_loss / len(y_):f}')
 
         # save
         path = os.path.join('__cache__', 'tf', f'dbow-{name}-{uuid.uuid4()}')
@@ -245,8 +251,8 @@ def run_nn(X_train, y_train, X_test, y_test, embedding_size, layer_sizes, start_
         sess.run(tf.global_variables_initializer())
         for i in range(epoch_size):
             p = np.random.permutation(len(y_train))
-            total_loss = 0
             cur_lr = start_lr - (start_lr - end_lr) / (epoch_size - 1) * i
+            total_loss = 0
             for j in range(0, len(y_train), batch_size):
                 k = p[j:j + batch_size]
                 _, batch_loss = sess.run([train_op, loss], feed_dict={X: X_train[k], y: y_train[k], lr: cur_lr})
