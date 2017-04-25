@@ -7,8 +7,9 @@ from collections import Counter
 import joblib
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.ops import init_ops
+from tensorflow.contrib.opt import LazyAdamOptimizer
 from tensorflow.contrib.tensorboard.plugins import projector
+from tensorflow.python.ops import init_ops
 
 from dist_rep_sent_doc.data import imdb, sstb
 from dist_rep_sent_doc.huffman import build_huffman
@@ -80,7 +81,7 @@ def rolling_window(a, window):
 
 # noinspection PyTypeChecker
 def run_pvdm(
-    name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, window_size, embedding_size, start_lr, end_lr,
+    name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, window_size, embedding_size, lr,
     batch_size, epoch_size, train_model_path=None
 ):
     # network
@@ -88,7 +89,6 @@ def run_pvdm(
     X_doc = tf.placeholder(tf.int32, [None])
     X_words = tf.placeholder(tf.int32, [None, 2 * window_size])
     y = tf.placeholder(tf.int32, [None])
-    lr = tf.placeholder(tf.float32, [])
     emb_doc = tf.Variable(tf.random_uniform(
         [len(docs), embedding_size], -0.5 / embedding_size, 0.5 / embedding_size
     ))
@@ -102,15 +102,11 @@ def run_pvdm(
     flatten = tf.reshape(emb, [-1, (2 * window_size + 1) * embedding_size])
     l = HierarchicalSoftmaxLayer(tree, word_to_index)
     loss = -l.apply([flatten, y], training=True)
-    opt = tf.train.GradientDescentOptimizer(lr)
+    opt = LazyAdamOptimizer(lr)
     grads_and_vars = opt.compute_gradients(loss)
     if not training_:
         # only train document embeddings
         grads_and_vars = [(grad, var) for grad, var in grads_and_vars if var == emb_doc]
-    grads_and_vars = [
-        (tf.IndexedSlices(tf.clip_by_value(grad.values, -10, 10), grad.indices), var)
-        for grad, var in grads_and_vars
-    ]
     train_op = opt.apply_gradients(grads_and_vars)
 
     # run
@@ -140,13 +136,10 @@ def run_pvdm(
             X_words_ = np.vstack(X_words_)
             y_ = np.concatenate(y_)
             p = np.random.permutation(len(y_))
-            cur_lr = start_lr - (start_lr - end_lr) / (epoch_size - 1) * i
             total_loss = 0
             for j in range(0, len(y_), batch_size):
                 k = p[j:j + batch_size]
-                _, batch_loss = sess.run([train_op, loss], feed_dict={
-                    X_doc: X_doc_[k], X_words: X_words_[k], y: y_[k], lr: cur_lr
-                })
+                _, batch_loss = sess.run([train_op, loss], feed_dict={X_doc: X_doc_[k], X_words: X_words_[k], y: y_[k]})
                 total_loss += batch_loss
             print(datetime.datetime.now(), f'finished epoch {i}, loss: {total_loss / len(y_):f}')
 
@@ -159,29 +152,24 @@ def run_pvdm(
 
 # noinspection PyTypeChecker
 def run_dbow(
-    name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, embedding_size, start_lr, end_lr,
+    name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, embedding_size, lr,
     batch_size, epoch_size, train_model_path=None
 ):
     # network
     tf.reset_default_graph()
     X_doc = tf.placeholder(tf.int32, [None])
     y = tf.placeholder(tf.int32, [None])
-    lr = tf.placeholder(tf.float32, [])
     emb_doc = tf.Variable(tf.random_uniform(
         [len(docs), embedding_size], -0.5 / embedding_size, 0.5 / embedding_size
     ))
     emb = tf.nn.embedding_lookup(emb_doc, X_doc)
     l = HierarchicalSoftmaxLayer(tree, word_to_index)
     loss = -l.apply([emb, y], training=True)
-    opt = tf.train.GradientDescentOptimizer(lr)
+    opt = LazyAdamOptimizer(lr)
     grads_and_vars = opt.compute_gradients(loss)
     if not training_:
         # only train document embeddings
         grads_and_vars = [(grad, var) for grad, var in grads_and_vars if var == emb_doc]
-    grads_and_vars = [
-        (tf.IndexedSlices(tf.clip_by_value(grad.values, -10, 10), grad.indices), var)
-        for grad, var in grads_and_vars
-    ]
     train_op = opt.apply_gradients(grads_and_vars)
 
     # run
@@ -205,11 +193,10 @@ def run_dbow(
             X_doc_ = np.concatenate(X_doc_)
             y_ = np.concatenate(y_)
             p = np.random.permutation(len(y_))
-            cur_lr = start_lr - (start_lr - end_lr) / (epoch_size - 1) * i
             total_loss = 0
             for j in range(0, len(y_), batch_size):
                 k = p[j:j + batch_size]
-                _, batch_loss = sess.run([train_op, loss], feed_dict={X_doc: X_doc_[k], y: y_[k], lr: cur_lr})
+                _, batch_loss = sess.run([train_op, loss], feed_dict={X_doc: X_doc_[k], y: y_[k]})
                 total_loss += batch_loss
             print(datetime.datetime.now(), f'finished epoch {i}, loss: {total_loss / len(y_):f}')
 
@@ -237,25 +224,24 @@ def load_docvecs(train, test, pvdm_train_path, pvdm_test_path, dbow_train_path, 
 
 
 # noinspection PyTypeChecker
-def run_nn(X_train, y_train, X_test, y_test, embedding_size, layer_sizes, start_lr, end_lr, batch_size, epoch_size):
+def run_nn(X_train, y_train, X_test, y_test, layer_sizes, lr, batch_size, epoch_size):
     tf.reset_default_graph()
-    X = tf.placeholder(tf.float32, [None, embedding_size])
+    X = tf.placeholder(tf.float32, [None, X_train.shape[1]])
     y = tf.placeholder(tf.int32, [None])
-    lr = tf.placeholder(tf.int32, [])
     dense = X
     for layer_size in layer_sizes:
         dense = tf.layers.dense(dense, layer_size, kernel_initializer=init_ops.glorot_uniform_initializer())
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=dense, labels=y))
-    train_op = tf.train.GradientDescentOptimizer(learning_rate=lr).minimize(loss)
+    train_op = tf.train.AdamOptimizer(learning_rate=lr).minimize(loss)
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
+        print(datetime.datetime.now(), 'started training')
         for i in range(epoch_size):
             p = np.random.permutation(len(y_train))
-            cur_lr = start_lr - (start_lr - end_lr) / (epoch_size - 1) * i
             total_loss = 0
             for j in range(0, len(y_train), batch_size):
                 k = p[j:j + batch_size]
-                _, batch_loss = sess.run([train_op, loss], feed_dict={X: X_train[k], y: y_train[k], lr: cur_lr})
+                _, batch_loss = sess.run([train_op, loss], feed_dict={X: X_train[k], y: y_train[k]})
                 total_loss += len(k) * batch_loss
             print(datetime.datetime.now(), f'finished epoch {i}, loss: {total_loss / len(y_train):f}')
         y_pred = sess.run(tf.argmax(dense, axis=1), feed_dict={X: X_test})
@@ -273,29 +259,29 @@ def main():
         # pvdm
         pvdm_train_path = run_pvdm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=5, embedding_size=100, start_lr=0.025, end_lr=0.001, batch_size=512, epoch_size=20
+            window_size=5, embedding_size=100, lr=0.001, batch_size=2048, epoch_size=20
         )
         pvdm_test_path = run_pvdm(
             f'{name}_test', test, *tables, training_=False,
-            window_size=5, embedding_size=100, start_lr=0.1, end_lr=0.0001, batch_size=2048, epoch_size=5,
+            window_size=5, embedding_size=100, lr=0.001, batch_size=2048, epoch_size=10,
             train_model_path=pvdm_train_path
         )
 
         # dbow
         dbow_train_path = run_dbow(
             f'{name}_train', train, *tables, training_=True,
-            embedding_size=100, start_lr=0.025, end_lr=0.001, batch_size=512, epoch_size=20
+            embedding_size=100, lr=0.001, batch_size=2048, epoch_size=20
         )
         dbow_test_path = run_dbow(
             f'{name}_test', test, *tables, training_=False,
-            embedding_size=100, start_lr=0.1, end_lr=0.0001, batch_size=2048, epoch_size=5,
+            embedding_size=100, lr=0.001, batch_size=2048, epoch_size=10,
             train_model_path=dbow_train_path
         )
 
         # classify
         run_nn(
             *load_docvecs(train, test, pvdm_train_path, pvdm_test_path, dbow_train_path, dbow_test_path),
-            embedding_size=200, layer_sizes=[2], start_lr=5, end_lr=0.1, batch_size=2048, epoch_size=20
+            layer_sizes=[2], lr=0.01, batch_size=2048, epoch_size=20
         )
 
     elif name in ('sstb_2', 'sstb_5'):
@@ -308,30 +294,29 @@ def main():
         # pvdm
         pvdm_train_path = run_pvdm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=4, embedding_size=100, start_lr=0.025, end_lr=0.001, batch_size=512, epoch_size=20
+            window_size=4, embedding_size=100, lr=0.001, batch_size=2048, epoch_size=30
         )
         pvdm_test_path = run_pvdm(
             f'{name}_test', test, *tables, training_=False,
-            window_size=4, embedding_size=100, start_lr=0.1, end_lr=0.0001, batch_size=2048, epoch_size=5,
+            window_size=4, embedding_size=100, lr=0.1, batch_size=2048, epoch_size=20,
             train_model_path=pvdm_train_path
         )
 
         # dbow
         dbow_train_path = run_dbow(
             f'{name}_train', train, *tables, training_=True,
-            embedding_size=100, start_lr=0.025, end_lr=0.001, batch_size=512, epoch_size=20
+            embedding_size=100, lr=0.01, batch_size=2048, epoch_size=30
         )
         dbow_test_path = run_dbow(
             f'{name}_test', test, *tables, training_=False,
-            embedding_size=100, start_lr=0.1, end_lr=0.0001, batch_size=2048, epoch_size=5,
+            embedding_size=100, lr=0.1, batch_size=2048, epoch_size=20,
             train_model_path=dbow_train_path
         )
 
         # classify
         run_nn(
             *load_docvecs(train, test, pvdm_train_path, pvdm_test_path, dbow_train_path, dbow_test_path),
-            embedding_size=200, layer_sizes=[(2 if name == 'sstb_2' else 5)],
-            start_lr=5, end_lr=0.1, batch_size=2048, epoch_size=10
+            layer_sizes=[(2 if name == 'sstb_2' else 5)], lr=0.001, batch_size=2048, epoch_size=10
         )
 
 if __name__ == '__main__':
