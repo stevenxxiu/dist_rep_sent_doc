@@ -84,6 +84,7 @@ def run_pvdm(
     batch_size, epoch_size, train_model_path=None
 ):
     # network
+    tf.reset_default_graph()
     X_doc = tf.placeholder(tf.int32, [None])
     X_words = tf.placeholder(tf.int32, [None, 2 * window_size])
     y = tf.placeholder(tf.int32, [None])
@@ -158,6 +159,7 @@ def run_dbow(
     batch_size, epoch_size, train_model_path=None
 ):
     # network
+    tf.reset_default_graph()
     X_doc = tf.placeholder(tf.int32, [None])
     y = tf.placeholder(tf.int32, [None])
     lr = tf.placeholder(tf.float32, [])
@@ -230,6 +232,7 @@ def load_docvecs(train, test, pvdm_train_path, pvdm_test_path, dbow_train_path, 
 
 # noinspection PyTypeChecker
 def run_nn(X_train, y_train, X_test, y_test, embedding_size, layer_sizes, start_lr, end_lr, batch_size, epoch_size):
+    tf.reset_default_graph()
     X = tf.placeholder(tf.float32, [None, embedding_size])
     y = tf.placeholder(tf.int32, [None])
     lr = tf.placeholder(tf.int32, [])
