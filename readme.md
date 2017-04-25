@@ -1,4 +1,6 @@
 # Distributed Representations of Sentences and Documents
+This is an attempt to reproduce the paper using tensorflow, commonly known as `doc2vec`. We cannot fully reproduce it's results, but obtain results similar to gensim.
+
 ## Dataset
 To normalize the dataset (the stanford tool does some regex replacements to fix weird trees):
 
