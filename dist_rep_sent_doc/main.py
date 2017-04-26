@@ -3,6 +3,7 @@ import datetime
 import os
 import uuid
 from collections import Counter
+from multiprocessing import Process, Queue
 
 import joblib
 import numpy as np
@@ -80,6 +81,22 @@ def rolling_window(a, window):
 
 
 # noinspection PyTypeChecker
+def pvdm_sample(docs, word_to_index, word_to_prob, window_size, epoch_size, q):
+    for i in range(epoch_size):
+        X_doc_, X_words_, y_ = [], [], []
+        for j, doc in enumerate(docs):
+            # remove infrequent words & sample frequent words
+            index = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
+            probs = np.array([word_to_prob[word] for word in doc[1] if word in word_to_index])
+            index = index[np.random.binomial(1, p=probs).astype(np.bool)]
+            padded = np.pad(index, window_size, 'constant', constant_values=word_to_index['\0'])
+            rolled = rolling_window(padded, 2 * window_size + 1)
+            X_doc_.append(np.repeat(j, len(index)))
+            y_.append(index)
+            X_words_.append(np.delete(rolled, window_size, axis=1))
+        q.put([np.concatenate(X_doc_), np.vstack(X_words_), np.concatenate(y_)])
+
+
 def run_pvdm(
     name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, window_size, embedding_size, lr,
     batch_size, epoch_size, train_model_path=None
@@ -120,21 +137,10 @@ def run_pvdm(
 
         # train
         print(datetime.datetime.now(), 'started training')
+        q = Queue(1)
+        Process(target=pvdm_sample, args=(docs, word_to_index, word_to_prob, window_size, epoch_size, q)).start()
         for i in range(epoch_size):
-            X_doc_, X_words_, y_ = [], [], []
-            for j, doc in enumerate(docs):
-                # remove infrequent words & sample frequent words
-                index = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
-                probs = np.array([word_to_prob[word] for word in doc[1] if word in word_to_index])
-                index = index[np.random.binomial(1, p=probs).astype(np.bool)]
-                padded = np.pad(index, window_size, 'constant', constant_values=word_to_index['\0'])
-                rolled = rolling_window(padded, 2 * window_size + 1)
-                X_doc_.append(np.repeat(j, len(index)))
-                y_.append(index)
-                X_words_.append(np.delete(rolled, window_size, axis=1))
-            X_doc_ = np.concatenate(X_doc_)
-            X_words_ = np.vstack(X_words_)
-            y_ = np.concatenate(y_)
+            X_doc_, X_words_, y_ = q.get()
             p = np.random.permutation(len(y_))
             total_loss = 0
             for j in range(0, len(y_), batch_size):
@@ -148,6 +154,18 @@ def run_pvdm(
         os.makedirs(path)
         save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, l.W, sess)
         return path
+
+
+# noinspection PyTypeChecker
+def dbow_sample(docs, word_to_index, epoch_size, q):
+    for i in range(epoch_size):
+        X_doc_, y_ = [], []
+        for j, doc in enumerate(docs):
+            # remove infrequent words
+            index = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
+            X_doc_.append(np.repeat(j, len(index)))
+            y_.append(index)
+        q.put([np.concatenate(X_doc_), np.concatenate(y_)])
 
 
 # noinspection PyTypeChecker
@@ -183,15 +201,10 @@ def run_dbow(
 
         # train
         print(datetime.datetime.now(), 'started training')
+        q = Queue(1)
+        Process(target=dbow_sample, args=(docs, word_to_index, epoch_size, q)).start()
         for i in range(epoch_size):
-            X_doc_, y_ = [], []
-            for j, doc in enumerate(docs):
-                # remove infrequent words
-                index = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
-                X_doc_.append(np.repeat(j, len(index)))
-                y_.append(index)
-            X_doc_ = np.concatenate(X_doc_)
-            y_ = np.concatenate(y_)
+            X_doc_, X_words_, y_ = q.get()
             p = np.random.permutation(len(y_))
             total_loss = 0
             for j in range(0, len(y_), batch_size):
