@@ -204,7 +204,7 @@ def run_dbow(
         q = Queue(1)
         Process(target=dbow_sample, args=(docs, word_to_index, epoch_size, q)).start()
         for i in range(epoch_size):
-            X_doc_, X_words_, y_ = q.get()
+            X_doc_, y_ = q.get()
             p = np.random.permutation(len(y_))
             total_loss = 0
             for j in range(0, len(y_), batch_size):
@@ -264,7 +264,7 @@ def run_nn(X_train, y_train, X_test, y_test, layer_sizes, lr, batch_size, epoch_
 
 # noinspection PyTypeChecker
 def main():
-    name = 'imdb'
+    name = 'sstb_2'
     if name == 'imdb':
         train, val, test = imdb.load_data('../data/imdb_sentiment')
         tables = gen_tables(name, train, 2, 1e-3)
@@ -302,12 +302,12 @@ def main():
             '../data/stanford_sentiment_treebank/class_2' if name == 'sstb_2' else
             '../data/stanford_sentiment_treebank/class_5'
         )
-        tables = gen_tables(name, train, 2, 1e-5)
+        tables = gen_tables(name, train, 2, 1e-3)
 
         # pvdm
         pvdm_train_path = run_pvdm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=4, embedding_size=100, lr=0.001, batch_size=2048, epoch_size=30
+            window_size=4, embedding_size=100, lr=0.01, batch_size=2048, epoch_size=30
         )
         pvdm_test_path = run_pvdm(
             f'{name}_test', test, *tables, training_=False,
