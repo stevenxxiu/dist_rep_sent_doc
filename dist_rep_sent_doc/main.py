@@ -89,8 +89,8 @@ def pvdm_sample(docs, word_to_index, word_to_prob, window_size, epoch_size, q):
             index = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
             probs = np.array([word_to_prob[word] for word in doc[1] if word in word_to_index])
             index = index[np.random.binomial(1, p=probs).astype(np.bool)]
-            padded = np.pad(index, window_size, 'constant', constant_values=word_to_index['\0'])
-            rolled = rolling_window(padded, 2 * window_size + 1)
+            padded = np.pad(index, (window_size, 0), 'constant', constant_values=word_to_index['\0'])
+            rolled = rolling_window(padded, window_size + 1)
             X_doc_.append(np.repeat(j, len(index)))
             y_.append(index)
             X_words_.append(np.delete(rolled, window_size, axis=1))
@@ -104,7 +104,7 @@ def run_pvdm(
     # network
     tf.reset_default_graph()
     X_doc = tf.placeholder(tf.int32, [None])
-    X_words = tf.placeholder(tf.int32, [None, 2 * window_size])
+    X_words = tf.placeholder(tf.int32, [None, window_size])
     y = tf.placeholder(tf.int32, [None])
     emb_doc = tf.Variable(tf.random_uniform(
         [len(docs), embedding_size], -0.5 / embedding_size, 0.5 / embedding_size
@@ -116,7 +116,7 @@ def run_pvdm(
         tf.reshape(tf.nn.embedding_lookup(emb_doc, X_doc), [-1, 1, embedding_size]),
         tf.nn.embedding_lookup(emb_word, X_words)
     ], 1)
-    flatten = tf.reshape(emb, [-1, (2 * window_size + 1) * embedding_size])
+    flatten = tf.reshape(emb, [-1, (window_size + 1) * embedding_size])
     l = HierarchicalSoftmaxLayer(tree, word_to_index)
     loss = -l.apply([flatten, y], training=True)
     opt = LazyAdamOptimizer(lr)
@@ -264,7 +264,7 @@ def run_nn(X_train, y_train, X_test, y_test, layer_sizes, lr, batch_size, epoch_
 
 # noinspection PyTypeChecker
 def main():
-    name = 'sstb_2'
+    name = 'imdb'
     if name == 'imdb':
         train, val, test = imdb.load_data('../data/imdb_sentiment')
         tables = gen_tables(name, train, 2, 1e-3)
@@ -272,11 +272,11 @@ def main():
         # pvdm
         pvdm_train_path = run_pvdm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=5, embedding_size=100, lr=0.001, batch_size=2048, epoch_size=20
+            window_size=9, embedding_size=100, lr=0.001, batch_size=2048, epoch_size=20
         )
         pvdm_test_path = run_pvdm(
             f'{name}_test', test, *tables, training_=False,
-            window_size=5, embedding_size=100, lr=0.001, batch_size=2048, epoch_size=10,
+            window_size=9, embedding_size=100, lr=0.001, batch_size=2048, epoch_size=10,
             train_model_path=pvdm_train_path
         )
 
@@ -307,11 +307,11 @@ def main():
         # pvdm
         pvdm_train_path = run_pvdm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=4, embedding_size=100, lr=0.01, batch_size=2048, epoch_size=30
+            window_size=8, embedding_size=100, lr=0.01, batch_size=2048, epoch_size=30
         )
         pvdm_test_path = run_pvdm(
             f'{name}_test', test, *tables, training_=False,
-            window_size=4, embedding_size=100, lr=0.1, batch_size=2048, epoch_size=20,
+            window_size=8, embedding_size=100, lr=0.1, batch_size=2048, epoch_size=20,
             train_model_path=pvdm_train_path
         )
 
