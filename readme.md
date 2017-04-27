@@ -9,7 +9,7 @@ To normalize the dataset (the stanford tool does some regex replacements to fix 
     java -cp stanford-corenlp-3.7.0.jar edu.stanford.nlp.sentiment.ReadSentimentDataset -numClasses 5 -inputDir ../data/_input/stanford_sentiment_treebank  -outputDir ../data/class_5/stanford_sentiment_treebank
 
 ## Unclear parts of the paper:
-The model itself is very confusing, the diagram shows prediction of the next word given previous words, but the paper also says that the only formal change from the `word2vec` paper is the addition of the paragraph vector, however the `word2vec` paper predicts the center word given surrounding words.
+It is possible that the model is actually predicting the center word instead of the end word since this gives better results, since predicting the center word is what `word2vec` does.
 
 The random initializations of the word embedding and softmax weights are not specified.
 
@@ -19,12 +19,12 @@ The learning rate/gradient descent method is not specified. The objective is not
 
 It is not described how unknown words during validation are handled.
 
-It is not described what process of training the logistic regression or neural net plus logistic regression models are used, we use sklearn's defaults.
+It is not described in detail what the logistic regression and neural network models are, we assume the most common models and use no regularization.
 
 ### Can be missed
 A detailed explanation of window size is in the Experimental Protocols section.
 
-The imdb dataset uses a neural net and a logistic regression, instead of logistic regression alone.
+The imdb dataset uses a neural net instead of logistic regression alone.
 
 ### Gensim differences
 - Option to remove infrequent words entirely.
