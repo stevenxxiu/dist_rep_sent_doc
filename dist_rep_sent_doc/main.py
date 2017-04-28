@@ -20,7 +20,7 @@ memory = joblib.Memory('__cache__', verbose=0)
 
 
 @memory.cache(ignore=['docs'])
-def gen_tables(name, docs, vocab_min_freq, sample):
+def gen_tables(name, docs, vocab_min_freq):
     # map word to counts and indexes, infrequent words are removed entirely
     word_to_freq = {}
     for word, count in Counter(word for doc in docs for word in doc[1]).items():
@@ -34,14 +34,7 @@ def gen_tables(name, docs, vocab_min_freq, sample):
     # get huffman tree
     tree = build_huffman(word_to_freq)
 
-    # get word sub-sampling probabilities
-    word_to_prob = {}
-    total_count = sum(word_to_freq.values())
-    for word, count in word_to_freq.items():
-        ratio = sample / (count / total_count) if count > 0 else 1
-        word_to_prob[word] = min(np.sqrt(ratio), 1)
-
-    return word_to_freq, word_to_index, tree, word_to_prob
+    return word_to_index, word_to_freq, tree
 
 
 def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_W, sess):
@@ -81,14 +74,18 @@ def rolling_window(a, window):
 
 
 # noinspection PyTypeChecker
-def pvdm_sample(docs, word_to_index, word_to_prob, window_size, epoch_size, q):
+def pvdm_sample(docs, word_to_index, word_to_freq, sample, window_size, epoch_size, q):
+    probs = np.empty(len(word_to_freq))
+    total_count = sum(word_to_freq.values())
+    for word, count in word_to_freq.items():
+        ratio = sample / (count / total_count) if count > 0 else 1
+        probs[word_to_index[word]] = min(np.sqrt(ratio), 1)
     for i in range(epoch_size):
         X_doc_, X_words_, y_ = [], [], []
         for j, doc in enumerate(docs):
             # remove infrequent words & sample frequent words
             index = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
-            probs = np.array([word_to_prob[word] for word in doc[1] if word in word_to_index])
-            index = index[np.random.binomial(1, p=probs).astype(np.bool)]
+            index = index[np.random.binomial(1, p=probs[index]).astype(np.bool)]
             padded = np.pad(index, (window_size, 0), 'constant', constant_values=word_to_index['\0'])
             rolled = rolling_window(padded, window_size + 1)
             X_doc_.append(np.repeat(j, len(index)))
@@ -98,8 +95,8 @@ def pvdm_sample(docs, word_to_index, word_to_prob, window_size, epoch_size, q):
 
 
 def run_pvdm(
-    name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, window_size, embedding_size, lr,
-    batch_size, epoch_size, train_model_path=None
+    name, docs, word_to_index, word_to_freq, tree, training_, window_size, embedding_size, lr,
+    sample, batch_size, epoch_size, train_model_path=None
 ):
     # network
     tf.reset_default_graph()
@@ -138,7 +135,9 @@ def run_pvdm(
         # train
         print(datetime.datetime.now(), 'started training')
         q = Queue(1)
-        Process(target=pvdm_sample, args=(docs, word_to_index, word_to_prob, window_size, epoch_size, q)).start()
+        Process(target=pvdm_sample, args=(
+            docs, word_to_index, word_to_freq, sample, window_size, epoch_size, q
+        )).start()
         for i in range(epoch_size):
             X_doc_, X_words_, y_ = q.get()
             p = np.random.permutation(len(y_))
@@ -157,12 +156,18 @@ def run_pvdm(
 
 
 # noinspection PyTypeChecker
-def dbow_sample(docs, word_to_index, epoch_size, q):
+def dbow_sample(docs, word_to_index, word_to_freq, sample, epoch_size, q):
+    probs = np.empty(len(word_to_freq))
+    total_count = sum(word_to_freq.values())
+    for word, count in word_to_freq.items():
+        ratio = sample / (count / total_count) if count > 0 else 1
+        probs[word_to_index[word]] = min(np.sqrt(ratio), 1)
     for i in range(epoch_size):
         X_doc_, y_ = [], []
         for j, doc in enumerate(docs):
-            # remove infrequent words
+            # remove infrequent words & sample frequent words
             index = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
+            index = index[np.random.binomial(1, p=probs[index]).astype(np.bool)]
             X_doc_.append(np.repeat(j, len(index)))
             y_.append(index)
         q.put([np.concatenate(X_doc_), np.concatenate(y_)])
@@ -170,8 +175,8 @@ def dbow_sample(docs, word_to_index, epoch_size, q):
 
 # noinspection PyTypeChecker
 def run_dbow(
-    name, docs, word_to_freq, word_to_index, tree, word_to_prob, training_, embedding_size, lr,
-    batch_size, epoch_size, train_model_path=None
+    name, docs, word_to_index, word_to_freq, tree, training_, embedding_size, lr,
+    sample, batch_size, epoch_size, train_model_path=None
 ):
     # network
     tf.reset_default_graph()
@@ -202,7 +207,7 @@ def run_dbow(
         # train
         print(datetime.datetime.now(), 'started training')
         q = Queue(1)
-        Process(target=dbow_sample, args=(docs, word_to_index, epoch_size, q)).start()
+        Process(target=dbow_sample, args=(docs, word_to_index, word_to_freq, sample, epoch_size, q)).start()
         for i in range(epoch_size):
             X_doc_, y_ = q.get()
             p = np.random.permutation(len(y_))
@@ -267,27 +272,27 @@ def main():
     name = 'imdb'
     if name == 'imdb':
         train, val, test = imdb.load_data('../data/imdb_sentiment')
-        tables = gen_tables(name, train, 2, 1e-3)
+        tables = gen_tables(name, train, 2)
 
         # pvdm
         pvdm_train_path = run_pvdm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=9, embedding_size=100, lr=0.001, batch_size=2048, epoch_size=20
+            window_size=9, embedding_size=100, lr=0.001, sample=1e-3, batch_size=2048, epoch_size=20
         )
         pvdm_test_path = run_pvdm(
             f'{name}_test', test, *tables, training_=False,
-            window_size=9, embedding_size=100, lr=0.001, batch_size=2048, epoch_size=10,
+            window_size=9, embedding_size=100, lr=0.001, sample=1e-3, batch_size=2048, epoch_size=10,
             train_model_path=pvdm_train_path
         )
 
         # dbow
         dbow_train_path = run_dbow(
             f'{name}_train', train, *tables, training_=True,
-            embedding_size=100, lr=0.001, batch_size=2048, epoch_size=20
+            embedding_size=100, lr=0.001, batch_size=2048, sample=1e-3, epoch_size=20
         )
         dbow_test_path = run_dbow(
             f'{name}_test', test, *tables, training_=False,
-            embedding_size=100, lr=0.001, batch_size=2048, epoch_size=10,
+            embedding_size=100, lr=0.001, batch_size=2048, sample=1e-3, epoch_size=10,
             train_model_path=dbow_train_path
         )
 
@@ -302,27 +307,27 @@ def main():
             '../data/stanford_sentiment_treebank/class_2' if name == 'sstb_2' else
             '../data/stanford_sentiment_treebank/class_5'
         )
-        tables = gen_tables(name, train, 2, 1e-3)
+        tables = gen_tables(name, train, 2)
 
         # pvdm
         pvdm_train_path = run_pvdm(
             f'{name}_train', train, *tables, training_=True,
-            window_size=8, embedding_size=100, lr=0.01, batch_size=2048, epoch_size=30
+            window_size=8, embedding_size=100, lr=0.01, sample=1e-3, batch_size=2048, epoch_size=30
         )
         pvdm_test_path = run_pvdm(
             f'{name}_test', test, *tables, training_=False,
-            window_size=8, embedding_size=100, lr=0.1, batch_size=2048, epoch_size=20,
+            window_size=8, embedding_size=100, lr=0.1, sample=1e-3, batch_size=2048, epoch_size=20,
             train_model_path=pvdm_train_path
         )
 
         # dbow
         dbow_train_path = run_dbow(
             f'{name}_train', train, *tables, training_=True,
-            embedding_size=100, lr=0.01, batch_size=2048, epoch_size=30
+            embedding_size=100, lr=0.01, sample=1e-3, batch_size=2048, epoch_size=30
         )
         dbow_test_path = run_dbow(
             f'{name}_test', test, *tables, training_=False,
-            embedding_size=100, lr=0.1, batch_size=2048, epoch_size=20,
+            embedding_size=100, lr=0.1, sample=1e-3, batch_size=2048, epoch_size=20,
             train_model_path=dbow_train_path
         )
 
