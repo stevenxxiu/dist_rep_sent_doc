@@ -64,7 +64,7 @@ def save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, hs_W,
         {'emb_word': emb_word, 'emb_doc': emb_doc, 'hs_W': hs_W} if emb_word else
         {'emb_doc': emb_doc, 'hs_W': hs_W}
     )
-    saver.save(sess, os.path.join(path, 'model.ckpt'))
+    saver.save(sess, os.path.join(path, 'model.ckpt'), write_meta_graph=False)
 
 
 def rolling_window(a, window):
