@@ -1,5 +1,5 @@
 /.idea/
-/.ipynb_checkpoints/
 /__cache__/
+.ipynb_checkpoints/
 __pycache__/
-~$*.xlsx
+.~lock.*#
