@@ -1,7 +1,8 @@
+import argparse
 import csv
 import datetime
+import json
 import os
-import uuid
 from collections import Counter
 from multiprocessing import Process, Queue
 
@@ -95,8 +96,8 @@ def pvdm_sample(docs, word_to_index, word_to_freq, sample, window_size, epoch_si
 
 
 def run_pvdm(
-    name, docs, word_to_index, word_to_freq, tree, training_, window_size, embedding_size, lr,
-    sample, batch_size, epoch_size, train_model_path=None
+    docs, word_to_index, word_to_freq, tree, mode, window_size, embedding_size, lr,
+    sample, batch_size, epoch_size, save_path, train_path=None
 ):
     # network
     tf.reset_default_graph()
@@ -113,12 +114,12 @@ def run_pvdm(
         tf.reshape(tf.nn.embedding_lookup(emb_doc, X_doc), [-1, 1, embedding_size]),
         tf.nn.embedding_lookup(emb_word, X_words)
     ], 1)
-    flatten = tf.reshape(emb, [-1, (window_size + 1) * embedding_size])
+    flatten = tf.reshape(emb, [-1, (window_size + 1) * embedding_size]) if mode == 'concat' else tf.reduce_mean(emb, 1)
     l = HierarchicalSoftmaxLayer(tree, word_to_index)
     loss = -l.apply([flatten, y], training=True)
     opt = LazyAdamOptimizer(lr)
     grads_and_vars = opt.compute_gradients(loss)
-    if not training_:
+    if train_path:
         # only train document embeddings
         grads_and_vars = [(grad, var) for grad, var in grads_and_vars if var == emb_doc]
     train_op = opt.apply_gradients(grads_and_vars)
@@ -128,16 +129,18 @@ def run_pvdm(
         sess.run(tf.global_variables_initializer())
 
         # load trained model if we are doing inference
-        if not training_:
+        if train_path:
             saver = tf.train.Saver({'emb_word': emb_word, 'hs_W': l.W})
-            saver.restore(sess, os.path.join(train_model_path, 'model.ckpt'))
+            saver.restore(sess, os.path.join(train_path, 'model.ckpt'))
 
-        # train
-        print(datetime.datetime.now(), 'started training')
+        # start sampling
         q = Queue(1)
         Process(target=pvdm_sample, args=(
             docs, word_to_index, word_to_freq, sample, window_size, epoch_size, q
         )).start()
+
+        # train
+        print(datetime.datetime.now(), 'started training')
         for i in range(epoch_size):
             X_doc_, X_words_, y_ = q.get()
             p = np.random.permutation(len(y_))
@@ -149,10 +152,8 @@ def run_pvdm(
             print(datetime.datetime.now(), f'finished epoch {i}, loss: {total_loss / len(y_):f}')
 
         # save
-        path = os.path.join('__cache__', 'tf', f'pvdm-{name}-{uuid.uuid4()}')
-        os.makedirs(path)
-        save_model(path, docs, word_to_index, word_to_freq, emb_doc, emb_word, l.W, sess)
-        return path
+        os.makedirs(save_path, exist_ok=True)
+        save_model(save_path, docs, word_to_index, word_to_freq, emb_doc, emb_word, l.W, sess)
 
 
 # noinspection PyTypeChecker
@@ -173,10 +174,9 @@ def dbow_sample(docs, word_to_index, word_to_freq, sample, epoch_size, q):
         q.put([np.concatenate(X_doc_), np.concatenate(y_)])
 
 
-# noinspection PyTypeChecker
 def run_dbow(
-    name, docs, word_to_index, word_to_freq, tree, training_, embedding_size, lr,
-    sample, batch_size, epoch_size, train_model_path=None
+    docs, word_to_index, word_to_freq, tree, embedding_size, lr,
+    sample, batch_size, epoch_size, save_path, train_path=None
 ):
     # network
     tf.reset_default_graph()
@@ -190,7 +190,7 @@ def run_dbow(
     loss = -l.apply([emb, y], training=True)
     opt = LazyAdamOptimizer(lr)
     grads_and_vars = opt.compute_gradients(loss)
-    if not training_:
+    if train_path:
         # only train document embeddings
         grads_and_vars = [(grad, var) for grad, var in grads_and_vars if var == emb_doc]
     train_op = opt.apply_gradients(grads_and_vars)
@@ -200,14 +200,16 @@ def run_dbow(
         sess.run(tf.global_variables_initializer())
 
         # load trained model if we are doing inference
-        if not training_:
+        if train_path:
             saver = tf.train.Saver({'hs_W': l.W})
-            saver.restore(sess, os.path.join(train_model_path, 'model.ckpt'))
+            saver.restore(sess, os.path.join(train_path, 'model.ckpt'))
+
+        # start sampling
+        q = Queue(1)
+        Process(target=dbow_sample, args=(docs, word_to_index, word_to_freq, sample, epoch_size, q)).start()
 
         # train
         print(datetime.datetime.now(), 'started training')
-        q = Queue(1)
-        Process(target=dbow_sample, args=(docs, word_to_index, word_to_freq, sample, epoch_size, q)).start()
         for i in range(epoch_size):
             X_doc_, y_ = q.get()
             p = np.random.permutation(len(y_))
@@ -219,26 +221,17 @@ def run_dbow(
             print(datetime.datetime.now(), f'finished epoch {i}, loss: {total_loss / len(y_):f}')
 
         # save
-        path = os.path.join('__cache__', 'tf', f'dbow-{name}-{uuid.uuid4()}')
-        os.makedirs(path)
-        save_model(path, docs, word_to_index, word_to_freq, emb_doc, None, l.W, sess)
-        return path
+        os.makedirs(save_path, exist_ok=True)
+        save_model(save_path, docs, word_to_index, word_to_freq, emb_doc, None, l.W, sess)
 
 
-def load_docvecs(train, test, pvdm_train_path, pvdm_test_path, dbow_train_path, dbow_test_path):
-    pvdm_train, pvdm_test = tf.Variable(0., validate_shape=False), tf.Variable(0., validate_shape=False)
-    dbow_train, dbow_test = tf.Variable(0., validate_shape=False), tf.Variable(0., validate_shape=False)
+def load_nn_data(docs, paths):
+    vars_ = [tf.Variable(0., validate_shape=False) for _ in paths]
     with tf.Session() as sess:
-        tf.train.Saver({'emb_doc': pvdm_train}).restore(sess, os.path.join(pvdm_train_path, 'model.ckpt'))
-        tf.train.Saver({'emb_doc': pvdm_test}).restore(sess, os.path.join(pvdm_test_path, 'model.ckpt'))
-        tf.train.Saver({'emb_doc': dbow_train}).restore(sess, os.path.join(dbow_train_path, 'model.ckpt'))
-        tf.train.Saver({'emb_doc': dbow_test}).restore(sess, os.path.join(dbow_test_path, 'model.ckpt'))
-        i = [i for i, doc in enumerate(train) if doc[0] is not None]
-        X_train = sess.run(tf.concat([pvdm_train, dbow_train], 1))[i]
-        y_train = np.array([doc[0] for doc in train])[i]
-        X_test = sess.run(tf.concat([pvdm_test, dbow_test], 1))
-        y_test = np.array([doc[0] for doc in test])
-        return X_train, y_train, X_test, y_test
+        for var, path in zip(vars_, paths):
+            tf.train.Saver({'emb_doc': var}).restore(sess, os.path.join(path, 'model.ckpt'))
+        i = [i for i, doc in enumerate(docs) if doc[0] is not None]
+        return sess.run(tf.concat(vars_, 1))[i], np.array([doc[0] for doc in docs])[i]
 
 
 # noinspection PyTypeChecker
@@ -267,74 +260,29 @@ def run_nn(X_train, y_train, X_test, y_test, layer_sizes, lr, batch_size, epoch_
         print(f'error rate: {(len(y_pred) - corrects) / len(y_pred)}')
 
 
-# noinspection PyTypeChecker
 def main():
-    name = 'imdb'
-    if name == 'imdb':
-        train, val, test = imdb.load_data('../data/imdb_sentiment')
-        tables = gen_tables(name, train, 2)
-
-        # pvdm
-        pvdm_train_path = run_pvdm(
-            f'{name}_train', train, *tables, training_=True,
-            window_size=9, embedding_size=100, lr=0.001, sample=1e-3, batch_size=2048, epoch_size=20
-        )
-        pvdm_test_path = run_pvdm(
-            f'{name}_test', test, *tables, training_=False,
-            window_size=9, embedding_size=100, lr=0.001, sample=1e-3, batch_size=2048, epoch_size=10,
-            train_model_path=pvdm_train_path
-        )
-
-        # dbow
-        dbow_train_path = run_dbow(
-            f'{name}_train', train, *tables, training_=True,
-            embedding_size=100, lr=0.001, batch_size=2048, sample=1e-3, epoch_size=20
-        )
-        dbow_test_path = run_dbow(
-            f'{name}_test', test, *tables, training_=False,
-            embedding_size=100, lr=0.001, batch_size=2048, sample=1e-3, epoch_size=10,
-            train_model_path=dbow_train_path
-        )
-
-        # classify
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument('dataset', choices=('imdb', 'sstb_2', 'sstb_5'))
+    arg_parser.add_argument('mode', choices=('pvdm', 'dbow', 'nn'))
+    arg_parser.add_argument('hyperparams')
+    args = arg_parser.parse_args()
+    print(args.dataset, args.mode, args.hyperparams)
+    hyperparams = json.loads(args.hyperparams)
+    train, val, test = \
+        imdb.load_data('../data/imdb_sentiment') if args.dataset == 'imdb' else \
+        sstb.load_data('../data/stanford_sentiment_treebank/class_2') if args.dataset == 'sstb_2' else \
+        sstb.load_data('../data/stanford_sentiment_treebank/class_5')
+    if args.mode == 'pvdm':
+        tables = gen_tables(args.dataset, train, hyperparams.pop('min_freq'))
+        run_pvdm(train if 'train_path' not in hyperparams else test, *tables, **hyperparams)
+    elif args.mode == 'dbow':
+        tables = gen_tables(args.dataset, train, hyperparams.pop('min_freq'))
+        run_dbow(train if 'train_path' not in hyperparams else test, *tables, **hyperparams)
+    else:
         run_nn(
-            *load_docvecs(train, test, pvdm_train_path, pvdm_test_path, dbow_train_path, dbow_test_path),
-            layer_sizes=[2], lr=0.01, batch_size=2048, epoch_size=20
-        )
-
-    elif name in ('sstb_2', 'sstb_5'):
-        train, val, test = sstb.load_data(
-            '../data/stanford_sentiment_treebank/class_2' if name == 'sstb_2' else
-            '../data/stanford_sentiment_treebank/class_5'
-        )
-        tables = gen_tables(name, train, 2)
-
-        # pvdm
-        pvdm_train_path = run_pvdm(
-            f'{name}_train', train, *tables, training_=True,
-            window_size=8, embedding_size=100, lr=0.01, sample=1e-3, batch_size=2048, epoch_size=30
-        )
-        pvdm_test_path = run_pvdm(
-            f'{name}_test', test, *tables, training_=False,
-            window_size=8, embedding_size=100, lr=0.1, sample=1e-3, batch_size=2048, epoch_size=20,
-            train_model_path=pvdm_train_path
-        )
-
-        # dbow
-        dbow_train_path = run_dbow(
-            f'{name}_train', train, *tables, training_=True,
-            embedding_size=100, lr=0.01, sample=1e-3, batch_size=2048, epoch_size=30
-        )
-        dbow_test_path = run_dbow(
-            f'{name}_test', test, *tables, training_=False,
-            embedding_size=100, lr=0.1, sample=1e-3, batch_size=2048, epoch_size=20,
-            train_model_path=dbow_train_path
-        )
-
-        # classify
-        run_nn(
-            *load_docvecs(train, test, pvdm_train_path, pvdm_test_path, dbow_train_path, dbow_test_path),
-            layer_sizes=[(2 if name == 'sstb_2' else 5)], lr=0.001, batch_size=2048, epoch_size=10
+            *load_nn_data(train, hyperparams.pop('train_paths')),
+            *load_nn_data(test, hyperparams.pop('test_paths')),
+            **hyperparams
         )
 
 if __name__ == '__main__':
