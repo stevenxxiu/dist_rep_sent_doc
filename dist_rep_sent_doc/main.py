@@ -263,25 +263,29 @@ def run_nn(X_train, y_train, X_test, y_test, layer_sizes, lr, batch_size, epoch_
 def main():
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('dataset', choices=('imdb', 'sstb_2', 'sstb_5'))
-    arg_parser.add_argument('mode', choices=('pvdm', 'dbow', 'nn'))
+    arg_parser.add_argument('val_test', choices=('val', 'test'))
+    arg_parser.add_argument('method', choices=('pvdm', 'dbow', 'nn'))
     arg_parser.add_argument('hyperparams')
     args = arg_parser.parse_args()
-    print(args.dataset, args.mode, args.hyperparams)
+    print(args.dataset, args.method, args.hyperparams)
     hyperparams = json.loads(args.hyperparams)
     train, val, test = \
         imdb.load_data('../data/imdb_sentiment') if args.dataset == 'imdb' else \
         sstb.load_data('../data/stanford_sentiment_treebank/class_2') if args.dataset == 'sstb_2' else \
         sstb.load_data('../data/stanford_sentiment_treebank/class_5')
-    if args.mode == 'pvdm':
+    val_test = {'val': val, 'test': test}[args.val_test]
+    if args.dataset == 'imdb' and args.val_test == 'test':
+        train.extend(val)
+    if args.method == 'pvdm':
         tables = gen_tables(args.dataset, train, hyperparams.pop('min_freq'))
-        run_pvdm(train if 'train_path' not in hyperparams else test, *tables, **hyperparams)
-    elif args.mode == 'dbow':
+        run_pvdm(train if 'train_path' not in hyperparams else val_test, *tables, **hyperparams)
+    elif args.method == 'dbow':
         tables = gen_tables(args.dataset, train, hyperparams.pop('min_freq'))
-        run_dbow(train if 'train_path' not in hyperparams else test, *tables, **hyperparams)
+        run_dbow(train if 'train_path' not in hyperparams else val_test, *tables, **hyperparams)
     else:
         run_nn(
             *load_nn_data(train, hyperparams.pop('train_paths')),
-            *load_nn_data(test, hyperparams.pop('test_paths')),
+            *load_nn_data(val_test, hyperparams.pop('test_paths')),
             **hyperparams
         )
 

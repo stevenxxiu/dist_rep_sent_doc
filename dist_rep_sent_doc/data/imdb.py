@@ -28,13 +28,15 @@ def normalize_data():
 
 
 def load_data(path):
+    # The validation set is selected s.t. it is roughly 20% and no movies overlap with the training sets to prevent rare
+    # words from occuring in both. This is similar to the construction of the test set.
     train_sents, val_sents, test_sents = [], [], []
     with open(os.path.join(path, 'train_pos.txt'), encoding='utf-8') as sr:
-        for line in sr:
-            train_sents.append((1, line.split()))
+        for i, line in enumerate(sr):
+            (train_sents if i < 10004 else val_sents).append((1, line.split()))
     with open(os.path.join(path, 'train_neg.txt'), encoding='utf-8') as sr:
-        for line in sr:
-            train_sents.append((0, line.split()))
+        for i, line in enumerate(sr):
+            (train_sents if i < 10001 else val_sents).append((0, line.split()))
     with open(os.path.join(path, 'train_unsup.txt'), encoding='utf-8') as sr:
         for line in sr:
             train_sents.append((None, line.split()))
