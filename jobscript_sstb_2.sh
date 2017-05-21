@@ -7,6 +7,7 @@
 module load tensorflow/1.0.1-python3.5
 cd /short/cp1/sx6361/dist_rep_sent_doc
 python=/home/563/sx6361/.pyenv/versions/3.6.1/bin/python
+export PYTHONPATH="/home/563/sx6361/.pyenv/versions/3.6.1/lib/python3.6/site-packages:$PWD"
 
 "$python" dist_rep_sent_doc/main.py sstb_2 test pvdm '{
     "mode": "concat", "window_size": 8, "embedding_size": 100,
