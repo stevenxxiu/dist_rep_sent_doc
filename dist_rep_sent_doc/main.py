@@ -257,7 +257,7 @@ def run_nn(X_train, y_train, X_test, y_test, layer_sizes, lr, batch_size, epoch_
             print(datetime.datetime.now(), f'finished epoch {i}, loss: {total_loss / len(y_train):f}')
         y_pred = sess.run(tf.argmax(dense, axis=1), feed_dict={X: X_test})
         corrects = sum(y_pred == y_test)
-        print(f'error rate: {(len(y_pred) - corrects) / len(y_pred)}')
+        print(f'error rate: {(len(y_pred) - corrects) / len(y_pred):f}')
 
 
 def main():
