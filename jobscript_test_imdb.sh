@@ -40,5 +40,5 @@ export PYTHONPATH="/home/563/sx6361/.pyenv/versions/3.6.1/lib/python3.6/site-pac
 "$python" dist_rep_sent_doc/main.py imdb test nn '{
     "train_paths": ["__cache__/tf/pvdm_concat_imdb_train", "__cache__/tf/dbow_imdb_train"],
     "test_paths": ["__cache__/tf/pvdm_concat_imdb_test", "__cache__/tf/dbow_imdb_test"],
-    "layer_sizes": [2], "lr": 0.01, "batch_size": 2048, "epoch_size": 20
+    "layer_sizes": [2], "lr": 0.01, "batch_size": 2048, "epoch_size": 100
 }'
