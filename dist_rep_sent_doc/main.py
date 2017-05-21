@@ -277,10 +277,10 @@ def main():
     if args.dataset == 'imdb' and args.val_test == 'test':
         train.extend(val)
     if args.method == 'pvdm':
-        tables = gen_tables(args.dataset, train, hyperparams.pop('min_freq'))
+        tables = gen_tables((args.dataset, args.val_test), train, hyperparams.pop('min_freq'))
         run_pvdm(train if 'train_path' not in hyperparams else val_test, *tables, **hyperparams)
     elif args.method == 'dbow':
-        tables = gen_tables(args.dataset, train, hyperparams.pop('min_freq'))
+        tables = gen_tables((args.dataset, args.val_test), train, hyperparams.pop('min_freq'))
         run_dbow(train if 'train_path' not in hyperparams else val_test, *tables, **hyperparams)
     else:
         run_nn(
