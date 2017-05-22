@@ -2,7 +2,7 @@
 #PBS -q gpu
 #PBS -l ngpus=2
 #PBS -l ncpus=6
-#PBS -l mem=16GB
+#PBS -l mem=32GB
 #PBS -l walltime=20:00:00
 module load tensorflow/1.0.1-python3.5
 cd /short/cp1/sx6361/dist_rep_sent_doc
