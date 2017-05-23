@@ -1,0 +1,194 @@
+imdb pvdm {"mode": "concat", "window_size": 7, "embedding_size": 50, "min_freq": 2, "sample": 0.001, "lr": 0.0005, "batch_size": 2048, "epoch_size": 46, "save_path": "__cache__/tf/97e04b31-db31-46f7-ad9d-11e884207970"}
+2017-05-22 14:05:16.987683 started training
+2017-05-22 14:07:04.016595 finished epoch 0, loss: 7.677599
+2017-05-22 14:08:21.528833 finished epoch 1, loss: 7.300224
+2017-05-22 14:09:38.680283 finished epoch 2, loss: 7.145637
+2017-05-22 14:10:56.279746 finished epoch 3, loss: 7.047302
+2017-05-22 14:12:13.004116 finished epoch 4, loss: 6.975562
+2017-05-22 14:13:31.138475 finished epoch 5, loss: 6.920516
+2017-05-22 14:14:47.745961 finished epoch 6, loss: 6.877003
+2017-05-22 14:16:05.567915 finished epoch 7, loss: 6.841078
+2017-05-22 14:17:23.024863 finished epoch 8, loss: 6.812838
+2017-05-22 14:18:39.653890 finished epoch 9, loss: 6.788301
+2017-05-22 14:19:56.806556 finished epoch 10, loss: 6.766420
+2017-05-22 14:21:13.032509 finished epoch 11, loss: 6.748852
+2017-05-22 14:22:29.721259 finished epoch 12, loss: 6.732045
+2017-05-22 14:23:48.677171 finished epoch 13, loss: 6.718104
+2017-05-22 14:25:05.288504 finished epoch 14, loss: 6.704362
+2017-05-22 14:26:24.870205 finished epoch 15, loss: 6.693396
+2017-05-22 14:27:43.278516 finished epoch 16, loss: 6.681520
+2017-05-22 14:29:01.883832 finished epoch 17, loss: 6.670645
+2017-05-22 14:30:19.991876 finished epoch 18, loss: 6.661178
+2017-05-22 14:31:38.088226 finished epoch 19, loss: 6.651326
+2017-05-22 14:32:55.819622 finished epoch 20, loss: 6.643209
+2017-05-22 14:34:13.716858 finished epoch 21, loss: 6.634434
+2017-05-22 14:35:31.866936 finished epoch 22, loss: 6.626584
+2017-05-22 14:36:50.050187 finished epoch 23, loss: 6.619841
+2017-05-22 14:38:08.392528 finished epoch 24, loss: 6.612735
+2017-05-22 14:39:27.050519 finished epoch 25, loss: 6.605748
+2017-05-22 14:40:45.554312 finished epoch 26, loss: 6.599192
+2017-05-22 14:42:03.872190 finished epoch 27, loss: 6.592978
+2017-05-22 14:43:21.990441 finished epoch 28, loss: 6.587198
+2017-05-22 14:44:39.765360 finished epoch 29, loss: 6.582179
+2017-05-22 14:45:56.185732 finished epoch 30, loss: 6.576043
+2017-05-22 14:47:13.403147 finished epoch 31, loss: 6.570560
+2017-05-22 14:48:32.351315 finished epoch 32, loss: 6.565762
+2017-05-22 14:49:49.746696 finished epoch 33, loss: 6.560513
+2017-05-22 14:51:06.992347 finished epoch 34, loss: 6.555574
+2017-05-22 14:52:23.382314 finished epoch 35, loss: 6.551030
+2017-05-22 14:53:39.340556 finished epoch 36, loss: 6.546510
+2017-05-22 14:54:55.363562 finished epoch 37, loss: 6.541723
+2017-05-22 14:56:12.846544 finished epoch 38, loss: 6.537432
+2017-05-22 14:57:29.869077 finished epoch 39, loss: 6.534072
+2017-05-22 14:58:45.965269 finished epoch 40, loss: 6.529462
+2017-05-22 15:00:03.350659 finished epoch 41, loss: 6.525760
+2017-05-22 15:01:19.806574 finished epoch 42, loss: 6.520949
+2017-05-22 15:02:36.066743 finished epoch 43, loss: 6.517811
+2017-05-22 15:03:52.302130 finished epoch 44, loss: 6.514385
+2017-05-22 15:05:08.196159 finished epoch 45, loss: 6.510476
+imdb pvdm {"mode": "concat", "window_size": 7, "embedding_size": 50, "min_freq": 2, "sample": 0.001, "lr": 0.00025, "batch_size": 2048, "epoch_size": 42, "save_path": "__cache__/tf/98f0a145-4d7a-4acd-902f-a7b72ced863e", "train_path": "__cache__/tf/97e04b31-db31-46f7-ad9d-11e884207970"}
+2017-05-22 15:05:59.757121 started training
+2017-05-22 15:06:05.691327 finished epoch 0, loss: 7.209862
+2017-05-22 15:06:09.344857 finished epoch 1, loss: 7.162975
+2017-05-22 15:06:12.964835 finished epoch 2, loss: 7.129725
+2017-05-22 15:06:16.665788 finished epoch 3, loss: 7.099155
+2017-05-22 15:06:20.316967 finished epoch 4, loss: 7.072973
+2017-05-22 15:06:23.916959 finished epoch 5, loss: 7.053347
+2017-05-22 15:06:27.545371 finished epoch 6, loss: 7.034696
+2017-05-22 15:06:31.170131 finished epoch 7, loss: 7.023088
+2017-05-22 15:06:34.814898 finished epoch 8, loss: 7.012212
+2017-05-22 15:06:38.389930 finished epoch 9, loss: 6.999715
+2017-05-22 15:06:42.043370 finished epoch 10, loss: 6.990285
+2017-05-22 15:06:45.612118 finished epoch 11, loss: 6.982539
+2017-05-22 15:06:49.257850 finished epoch 12, loss: 6.973896
+2017-05-22 15:06:52.857709 finished epoch 13, loss: 6.967303
+2017-05-22 15:06:56.497457 finished epoch 14, loss: 6.964867
+2017-05-22 15:07:00.117435 finished epoch 15, loss: 6.952863
+2017-05-22 15:07:03.740803 finished epoch 16, loss: 6.950849
+2017-05-22 15:07:07.355402 finished epoch 17, loss: 6.944376
+2017-05-22 15:07:10.976928 finished epoch 18, loss: 6.941221
+2017-05-22 15:07:14.573911 finished epoch 19, loss: 6.935586
+2017-05-22 15:07:18.169454 finished epoch 20, loss: 6.934013
+2017-05-22 15:07:21.776183 finished epoch 21, loss: 6.929822
+2017-05-22 15:07:25.376057 finished epoch 22, loss: 6.927948
+2017-05-22 15:07:28.974728 finished epoch 23, loss: 6.927509
+2017-05-22 15:07:32.588026 finished epoch 24, loss: 6.923479
+2017-05-22 15:07:36.206074 finished epoch 25, loss: 6.919803
+2017-05-22 15:07:39.810734 finished epoch 26, loss: 6.920792
+2017-05-22 15:07:43.396408 finished epoch 27, loss: 6.912165
+2017-05-22 15:07:46.981698 finished epoch 28, loss: 6.910913
+2017-05-22 15:07:50.635006 finished epoch 29, loss: 6.909469
+2017-05-22 15:07:54.209644 finished epoch 30, loss: 6.909670
+2017-05-22 15:07:57.814719 finished epoch 31, loss: 6.907577
+2017-05-22 15:08:01.433093 finished epoch 32, loss: 6.902585
+2017-05-22 15:08:05.028223 finished epoch 33, loss: 6.904662
+2017-05-22 15:08:08.612481 finished epoch 34, loss: 6.901485
+2017-05-22 15:08:12.205962 finished epoch 35, loss: 6.901905
+2017-05-22 15:08:15.807059 finished epoch 36, loss: 6.898038
+2017-05-22 15:08:19.493196 finished epoch 37, loss: 6.898493
+2017-05-22 15:08:23.162344 finished epoch 38, loss: 6.896937
+2017-05-22 15:08:26.766890 finished epoch 39, loss: 6.896018
+2017-05-22 15:08:30.289976 finished epoch 40, loss: 6.899333
+2017-05-22 15:08:33.844111 finished epoch 41, loss: 6.891605
+imdb nn {"train_paths": ["__cache__/tf/97e04b31-db31-46f7-ad9d-11e884207970"], "test_paths": ["__cache__/tf/98f0a145-4d7a-4acd-902f-a7b72ced863e"], "layer_sizes": [2], "lr": 0.01, "batch_size": 2048, "epoch_size": 100}
+2017-05-22 15:08:43.594180 started training
+2017-05-22 15:08:43.783478 finished epoch 0, loss: 0.658837, error rate: 0.294895
+2017-05-22 15:08:43.816926 finished epoch 1, loss: 0.595388, error rate: 0.249249
+2017-05-22 15:08:43.850940 finished epoch 2, loss: 0.549265, error rate: 0.229429
+2017-05-22 15:08:43.885065 finished epoch 3, loss: 0.515855, error rate: 0.218418
+2017-05-22 15:08:43.919632 finished epoch 4, loss: 0.490427, error rate: 0.209610
+2017-05-22 15:08:43.953771 finished epoch 5, loss: 0.470507, error rate: 0.202603
+2017-05-22 15:08:43.988377 finished epoch 6, loss: 0.454710, error rate: 0.192593
+2017-05-22 15:08:44.024644 finished epoch 7, loss: 0.441873, error rate: 0.188789
+2017-05-22 15:08:44.061078 finished epoch 8, loss: 0.431303, error rate: 0.186987
+2017-05-22 15:08:44.094974 finished epoch 9, loss: 0.422392, error rate: 0.184585
+2017-05-22 15:08:44.130752 finished epoch 10, loss: 0.414982, error rate: 0.180380
+2017-05-22 15:08:44.165340 finished epoch 11, loss: 0.408538, error rate: 0.178579
+2017-05-22 15:08:44.200795 finished epoch 12, loss: 0.403123, error rate: 0.176777
+2017-05-22 15:08:44.235279 finished epoch 13, loss: 0.398224, error rate: 0.175576
+2017-05-22 15:08:44.270336 finished epoch 14, loss: 0.394188, error rate: 0.174775
+2017-05-22 15:08:44.306630 finished epoch 15, loss: 0.390509, error rate: 0.173173
+2017-05-22 15:08:44.340110 finished epoch 16, loss: 0.387317, error rate: 0.171772
+2017-05-22 15:08:44.375585 finished epoch 17, loss: 0.384447, error rate: 0.172573
+2017-05-22 15:08:44.412900 finished epoch 18, loss: 0.381987, error rate: 0.172172
+2017-05-22 15:08:44.451923 finished epoch 19, loss: 0.379772, error rate: 0.171972
+2017-05-22 15:08:44.486132 finished epoch 20, loss: 0.377786, error rate: 0.172372
+2017-05-22 15:08:44.523725 finished epoch 21, loss: 0.375998, error rate: 0.172372
+2017-05-22 15:08:44.560865 finished epoch 22, loss: 0.374405, error rate: 0.170370
+2017-05-22 15:08:44.594966 finished epoch 23, loss: 0.373009, error rate: 0.170170
+2017-05-22 15:08:44.627892 finished epoch 24, loss: 0.371700, error rate: 0.169369
+2017-05-22 15:08:44.662733 finished epoch 25, loss: 0.370579, error rate: 0.169369
+2017-05-22 15:08:44.695504 finished epoch 26, loss: 0.369521, error rate: 0.169770
+2017-05-22 15:08:44.729997 finished epoch 27, loss: 0.368586, error rate: 0.168969
+2017-05-22 15:08:44.763139 finished epoch 28, loss: 0.367745, error rate: 0.169369
+2017-05-22 15:08:44.796937 finished epoch 29, loss: 0.366990, error rate: 0.169169
+2017-05-22 15:08:44.832642 finished epoch 30, loss: 0.366344, error rate: 0.169570
+2017-05-22 15:08:44.864885 finished epoch 31, loss: 0.365723, error rate: 0.167367
+2017-05-22 15:08:44.901246 finished epoch 32, loss: 0.365194, error rate: 0.166567
+2017-05-22 15:08:44.934950 finished epoch 33, loss: 0.364606, error rate: 0.167367
+2017-05-22 15:08:44.968545 finished epoch 34, loss: 0.364108, error rate: 0.167568
+2017-05-22 15:08:45.002317 finished epoch 35, loss: 0.363731, error rate: 0.167167
+2017-05-22 15:08:45.034924 finished epoch 36, loss: 0.363312, error rate: 0.165966
+2017-05-22 15:08:45.068758 finished epoch 37, loss: 0.362981, error rate: 0.166567
+2017-05-22 15:08:45.102790 finished epoch 38, loss: 0.362640, error rate: 0.165966
+2017-05-22 15:08:45.136024 finished epoch 39, loss: 0.362355, error rate: 0.165766
+2017-05-22 15:08:45.170166 finished epoch 40, loss: 0.362086, error rate: 0.165566
+2017-05-22 15:08:45.205178 finished epoch 41, loss: 0.361870, error rate: 0.165365
+2017-05-22 15:08:45.239117 finished epoch 42, loss: 0.361637, error rate: 0.164565
+2017-05-22 15:08:45.274477 finished epoch 43, loss: 0.361455, error rate: 0.163964
+2017-05-22 15:08:45.308250 finished epoch 44, loss: 0.361277, error rate: 0.164565
+2017-05-22 15:08:45.341783 finished epoch 45, loss: 0.361116, error rate: 0.164765
+2017-05-22 15:08:45.375822 finished epoch 46, loss: 0.360978, error rate: 0.163964
+2017-05-22 15:08:45.410050 finished epoch 47, loss: 0.360856, error rate: 0.163163
+2017-05-22 15:08:45.443970 finished epoch 48, loss: 0.360718, error rate: 0.163363
+2017-05-22 15:08:45.479923 finished epoch 49, loss: 0.360597, error rate: 0.163163
+2017-05-22 15:08:45.513444 finished epoch 50, loss: 0.360515, error rate: 0.163764
+2017-05-22 15:08:45.547911 finished epoch 51, loss: 0.360435, error rate: 0.163564
+2017-05-22 15:08:45.582391 finished epoch 52, loss: 0.360381, error rate: 0.163363
+2017-05-22 15:08:45.617479 finished epoch 53, loss: 0.360255, error rate: 0.161962
+2017-05-22 15:08:45.650220 finished epoch 54, loss: 0.360220, error rate: 0.163363
+2017-05-22 15:08:45.684289 finished epoch 55, loss: 0.360195, error rate: 0.161962
+2017-05-22 15:08:45.718464 finished epoch 56, loss: 0.360092, error rate: 0.162763
+2017-05-22 15:08:45.751299 finished epoch 57, loss: 0.360046, error rate: 0.162563
+2017-05-22 15:08:45.786613 finished epoch 58, loss: 0.360092, error rate: 0.162563
+2017-05-22 15:08:45.820636 finished epoch 59, loss: 0.360019, error rate: 0.161562
+2017-05-22 15:08:45.860129 finished epoch 60, loss: 0.359959, error rate: 0.163163
+2017-05-22 15:08:45.896932 finished epoch 61, loss: 0.359916, error rate: 0.161161
+2017-05-22 15:08:45.930247 finished epoch 62, loss: 0.359875, error rate: 0.162362
+2017-05-22 15:08:45.964843 finished epoch 63, loss: 0.359836, error rate: 0.162563
+2017-05-22 15:08:45.999132 finished epoch 64, loss: 0.359822, error rate: 0.160360
+2017-05-22 15:08:46.032613 finished epoch 65, loss: 0.359770, error rate: 0.161361
+2017-05-22 15:08:46.066477 finished epoch 66, loss: 0.359783, error rate: 0.161962
+2017-05-22 15:08:46.101562 finished epoch 67, loss: 0.359755, error rate: 0.161962
+2017-05-22 15:08:46.134760 finished epoch 68, loss: 0.359729, error rate: 0.160561
+2017-05-22 15:08:46.168534 finished epoch 69, loss: 0.359746, error rate: 0.160761
+2017-05-22 15:08:46.203670 finished epoch 70, loss: 0.359791, error rate: 0.162563
+2017-05-22 15:08:46.239249 finished epoch 71, loss: 0.359733, error rate: 0.160761
+2017-05-22 15:08:46.271950 finished epoch 72, loss: 0.359694, error rate: 0.159960
+2017-05-22 15:08:46.308084 finished epoch 73, loss: 0.359784, error rate: 0.160961
+2017-05-22 15:08:46.341820 finished epoch 74, loss: 0.359732, error rate: 0.162162
+2017-05-22 15:08:46.378331 finished epoch 75, loss: 0.359674, error rate: 0.160561
+2017-05-22 15:08:46.411221 finished epoch 76, loss: 0.359694, error rate: 0.160561
+2017-05-22 15:08:46.445848 finished epoch 77, loss: 0.359658, error rate: 0.160561
+2017-05-22 15:08:46.478840 finished epoch 78, loss: 0.359689, error rate: 0.160961
+2017-05-22 15:08:46.511826 finished epoch 79, loss: 0.359665, error rate: 0.160761
+2017-05-22 15:08:46.552008 finished epoch 80, loss: 0.359666, error rate: 0.160561
+2017-05-22 15:08:46.588235 finished epoch 81, loss: 0.359659, error rate: 0.160961
+2017-05-22 15:08:46.622805 finished epoch 82, loss: 0.359666, error rate: 0.160961
+2017-05-22 15:08:46.657616 finished epoch 83, loss: 0.359676, error rate: 0.160561
+2017-05-22 15:08:46.690768 finished epoch 84, loss: 0.359627, error rate: 0.160360
+2017-05-22 15:08:46.727833 finished epoch 85, loss: 0.359649, error rate: 0.160561
+2017-05-22 15:08:46.764344 finished epoch 86, loss: 0.359663, error rate: 0.159960
+2017-05-22 15:08:46.798957 finished epoch 87, loss: 0.359684, error rate: 0.159760
+2017-05-22 15:08:46.834066 finished epoch 88, loss: 0.359642, error rate: 0.161562
+2017-05-22 15:08:46.869656 finished epoch 89, loss: 0.359671, error rate: 0.160160
+2017-05-22 15:08:46.906151 finished epoch 90, loss: 0.359632, error rate: 0.160360
+2017-05-22 15:08:46.944003 finished epoch 91, loss: 0.359667, error rate: 0.160160
+2017-05-22 15:08:46.979659 finished epoch 92, loss: 0.359604, error rate: 0.159960
+2017-05-22 15:08:47.013931 finished epoch 93, loss: 0.359664, error rate: 0.160761
+2017-05-22 15:08:47.049072 finished epoch 94, loss: 0.359613, error rate: 0.160360
+2017-05-22 15:08:47.082979 finished epoch 95, loss: 0.359652, error rate: 0.161161
+2017-05-22 15:08:47.116801 finished epoch 96, loss: 0.359650, error rate: 0.160961
+2017-05-22 15:08:47.152663 finished epoch 97, loss: 0.359634, error rate: 0.160360
+2017-05-22 15:08:47.188272 finished epoch 98, loss: 0.359663, error rate: 0.160561
+2017-05-22 15:08:47.222670 finished epoch 99, loss: 0.359631, error rate: 0.159960
