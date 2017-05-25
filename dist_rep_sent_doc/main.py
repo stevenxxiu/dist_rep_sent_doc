@@ -16,7 +16,7 @@ from tensorflow.contrib.tensorboard.plugins import projector
 from tensorflow.python.ops import init_ops
 
 from dist_rep_sent_doc.data import imdb, sstb
-from dist_rep_sent_doc.huffman import build_huffman
+from dist_rep_sent_doc.huffman import build_huffman, tree_to_arrays
 from dist_rep_sent_doc.layers import HierarchicalSoftmaxLayer
 
 memory = joblib.Memory('__cache__', verbose=0)
@@ -35,7 +35,7 @@ def gen_tables(name, docs, vocab_min_freq):
     word_to_index['\0'] = len(word_to_index)
 
     # get huffman tree
-    tree = build_huffman(word_to_freq)
+    tree = tree_to_arrays(build_huffman(word_to_freq), word_to_index, len(word_to_freq))
 
     return word_to_index, word_to_freq, tree
 
@@ -117,7 +117,7 @@ def run_pvdm(
         tf.nn.embedding_lookup(emb_word, X_words)
     ], 1)
     flatten = tf.reshape(emb, [-1, (window_size + 1) * embedding_size]) if mode == 'concat' else tf.reduce_mean(emb, 1)
-    l = HierarchicalSoftmaxLayer(tree, word_to_index)
+    l = HierarchicalSoftmaxLayer(tree)
     loss = -l.apply([flatten, y], training=True)
     opt = LazyAdamOptimizer(lr)
     grads_and_vars = opt.compute_gradients(loss)
@@ -188,7 +188,7 @@ def run_dbow(
         [len(docs), embedding_size], -0.5 / embedding_size, 0.5 / embedding_size
     ))
     emb = tf.nn.embedding_lookup(emb_doc, X_doc)
-    l = HierarchicalSoftmaxLayer(tree, word_to_index)
+    l = HierarchicalSoftmaxLayer(tree)
     loss = -l.apply([emb, y], training=True)
     opt = LazyAdamOptimizer(lr)
     grads_and_vars = opt.compute_gradients(loss)
