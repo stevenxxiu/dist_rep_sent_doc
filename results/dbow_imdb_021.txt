@@ -1,4 +1,4 @@
-imdb dbow {"embedding_size": 50, "min_freq": 5, "sample": 1, "lr": 0.05, "batch_size": 2048, "epoch_size": 11, "save_path": "__cache__/tf/a70f9ec1-e0a7-4af3-8521-e78b6ecb2c98"}
+imdb val dbow '{"embedding_size": 50, "min_freq": 5, "sample": 1, "lr": 0.05, "batch_size": 2048, "epoch_size": 11, "save_path": "__cache__/tf/a70f9ec1-e0a7-4af3-8521-e78b6ecb2c98"}'
 2017-05-22 02:00:21.950513 started training
 2017-05-22 02:01:22.040458 finished epoch 0, loss: 7.720996
 2017-05-22 02:02:07.997592 finished epoch 1, loss: 7.064610
@@ -11,12 +11,12 @@ imdb dbow {"embedding_size": 50, "min_freq": 5, "sample": 1, "lr": 0.05, "batch_
 2017-05-22 02:07:31.439741 finished epoch 8, loss: 6.807657
 2017-05-22 02:08:16.964091 finished epoch 9, loss: 6.801771
 2017-05-22 02:09:02.360661 finished epoch 10, loss: 6.796852
-imdb dbow {"embedding_size": 50, "min_freq": 5, "sample": 1, "lr": 0.0025, "batch_size": 2048, "epoch_size": 3, "save_path": "__cache__/tf/206f7308-ef22-48a6-bfcd-36bca08d8c81", "train_path": "__cache__/tf/a70f9ec1-e0a7-4af3-8521-e78b6ecb2c98"}
+imdb val dbow '{"embedding_size": 50, "min_freq": 5, "sample": 1, "lr": 0.0025, "batch_size": 2048, "epoch_size": 3, "save_path": "__cache__/tf/206f7308-ef22-48a6-bfcd-36bca08d8c81", "train_path": "__cache__/tf/a70f9ec1-e0a7-4af3-8521-e78b6ecb2c98"}'
 2017-05-22 02:09:36.333090 started training
 2017-05-22 02:09:39.892473 finished epoch 0, loss: 6.635874
 2017-05-22 02:09:42.181795 finished epoch 1, loss: 6.536910
 2017-05-22 02:09:44.500557 finished epoch 2, loss: 6.500758
-imdb nn {"train_paths": ["__cache__/tf/a70f9ec1-e0a7-4af3-8521-e78b6ecb2c98"], "test_paths": ["__cache__/tf/206f7308-ef22-48a6-bfcd-36bca08d8c81"], "layer_sizes": [2], "lr": 0.01, "batch_size": 2048, "epoch_size": 100}
+imdb val nn '{"train_paths": ["__cache__/tf/a70f9ec1-e0a7-4af3-8521-e78b6ecb2c98"], "test_paths": ["__cache__/tf/206f7308-ef22-48a6-bfcd-36bca08d8c81"], "layer_sizes": [2], "lr": 0.01, "batch_size": 2048, "epoch_size": 100}
 2017-05-22 02:09:53.844924 started training
 2017-05-22 02:09:54.036833 finished epoch 0, loss: 0.715509, error rate: 0.351351
 2017-05-22 02:09:54.072855 finished epoch 1, loss: 0.602332, error rate: 0.226426

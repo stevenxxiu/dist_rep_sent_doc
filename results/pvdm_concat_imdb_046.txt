@@ -1,4 +1,4 @@
-imdb pvdm {"mode": "concat", "window_size": 5, "embedding_size": 250, "min_freq": 1, "sample": 0.01, "lr": 0.001, "batch_size": 2048, "epoch_size": 17, "save_path": "__cache__/tf/c78aac8b-3f2e-4094-8e1e-5e4fd1174cb7"}
+imdb val pvdm '{"mode": "concat", "window_size": 5, "embedding_size": 250, "min_freq": 1, "sample": 0.01, "lr": 0.001, "batch_size": 2048, "epoch_size": 17, "save_path": "__cache__/tf/c78aac8b-3f2e-4094-8e1e-5e4fd1174cb7"}'
 2017-05-23 12:11:45.517548 started training
 2017-05-23 12:16:36.579437 finished epoch 0, loss: 6.182455
 2017-05-23 12:21:01.117935 finished epoch 1, loss: 5.651306
@@ -17,7 +17,7 @@ imdb pvdm {"mode": "concat", "window_size": 5, "embedding_size": 250, "min_freq"
 2017-05-23 13:18:20.175872 finished epoch 14, loss: 4.482652
 2017-05-23 13:22:44.358167 finished epoch 15, loss: 4.456254
 2017-05-23 13:27:08.171782 finished epoch 16, loss: 4.432378
-imdb pvdm {"mode": "concat", "window_size": 5, "embedding_size": 250, "min_freq": 1, "sample": 0.01, "lr": 0.025, "batch_size": 2048, "epoch_size": 14, "save_path": "__cache__/tf/2fea2359-2281-4136-acc4-63e3fd3e4ff5", "train_path": "__cache__/tf/c78aac8b-3f2e-4094-8e1e-5e4fd1174cb7"}
+imdb val pvdm '{"mode": "concat", "window_size": 5, "embedding_size": 250, "min_freq": 1, "sample": 0.01, "lr": 0.025, "batch_size": 2048, "epoch_size": 14, "save_path": "__cache__/tf/2fea2359-2281-4136-acc4-63e3fd3e4ff5", "train_path": "__cache__/tf/c78aac8b-3f2e-4094-8e1e-5e4fd1174cb7"}'
 2017-05-23 13:28:50.115937 started training
 2017-05-23 13:29:04.614989 finished epoch 0, loss: 7.982112
 2017-05-23 13:29:16.647946 finished epoch 1, loss: 7.608702
@@ -33,7 +33,7 @@ imdb pvdm {"mode": "concat", "window_size": 5, "embedding_size": 250, "min_freq"
 2017-05-23 13:31:16.704580 finished epoch 11, loss: 6.752505
 2017-05-23 13:31:28.652496 finished epoch 12, loss: 6.740297
 2017-05-23 13:31:40.558540 finished epoch 13, loss: 6.725675
-imdb nn {"train_paths": ["__cache__/tf/c78aac8b-3f2e-4094-8e1e-5e4fd1174cb7"], "test_paths": ["__cache__/tf/2fea2359-2281-4136-acc4-63e3fd3e4ff5"], "layer_sizes": [2], "lr": 0.01, "batch_size": 2048, "epoch_size": 100}
+imdb val nn '{"train_paths": ["__cache__/tf/c78aac8b-3f2e-4094-8e1e-5e4fd1174cb7"], "test_paths": ["__cache__/tf/2fea2359-2281-4136-acc4-63e3fd3e4ff5"], "layer_sizes": [2], "lr": 0.01, "batch_size": 2048, "epoch_size": 100}
 2017-05-23 13:31:53.945437 started training
 2017-05-23 13:31:54.150884 finished epoch 0, loss: 0.621027, error rate: 0.277678
 2017-05-23 13:31:54.199705 finished epoch 1, loss: 0.498115, error rate: 0.236637

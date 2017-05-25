@@ -1,15 +1,15 @@
-imdb dbow {"embedding_size": 250, "min_freq": 3, "sample": 0.1, "lr": 0.0025, "batch_size": 2048, "epoch_size": 5, "save_path": "__cache__/tf/d396220e-88ad-4d99-842e-66fb6449fd6c"}
+imdb val dbow '{"embedding_size": 250, "min_freq": 3, "sample": 0.1, "lr": 0.0025, "batch_size": 2048, "epoch_size": 5, "save_path": "__cache__/tf/d396220e-88ad-4d99-842e-66fb6449fd6c"}'
 2017-05-22 05:53:18.374456 started training
 2017-05-22 05:54:49.623919 finished epoch 0, loss: 6.620667
 2017-05-22 05:56:06.045095 finished epoch 1, loss: 6.272296
 2017-05-22 05:57:22.679019 finished epoch 2, loss: 6.060662
 2017-05-22 05:58:38.546175 finished epoch 3, loss: 5.948937
 2017-05-22 05:59:54.534828 finished epoch 4, loss: 5.879798
-imdb dbow {"embedding_size": 250, "min_freq": 3, "sample": 0.1, "lr": 0.0005, "batch_size": 2048, "epoch_size": 2, "save_path": "__cache__/tf/10994c97-4261-4836-89e6-fddd28840288", "train_path": "__cache__/tf/d396220e-88ad-4d99-842e-66fb6449fd6c"}
+imdb val dbow '{"embedding_size": 250, "min_freq": 3, "sample": 0.1, "lr": 0.0005, "batch_size": 2048, "epoch_size": 2, "save_path": "__cache__/tf/10994c97-4261-4836-89e6-fddd28840288", "train_path": "__cache__/tf/d396220e-88ad-4d99-842e-66fb6449fd6c"}'
 2017-05-22 06:00:36.639677 started training
 2017-05-22 06:00:41.978913 finished epoch 0, loss: 6.681499
 2017-05-22 06:00:45.959845 finished epoch 1, loss: 6.538487
-imdb nn {"train_paths": ["__cache__/tf/d396220e-88ad-4d99-842e-66fb6449fd6c"], "test_paths": ["__cache__/tf/10994c97-4261-4836-89e6-fddd28840288"], "layer_sizes": [2], "lr": 0.01, "batch_size": 2048, "epoch_size": 100}
+imdb val nn '{"train_paths": ["__cache__/tf/d396220e-88ad-4d99-842e-66fb6449fd6c"], "test_paths": ["__cache__/tf/10994c97-4261-4836-89e6-fddd28840288"], "layer_sizes": [2], "lr": 0.01, "batch_size": 2048, "epoch_size": 100}
 2017-05-22 06:00:55.584279 started training
 2017-05-22 06:00:55.788556 finished epoch 0, loss: 0.567953, error rate: 0.184384
 2017-05-22 06:00:55.838171 finished epoch 1, loss: 0.404047, error rate: 0.160961

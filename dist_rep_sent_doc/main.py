@@ -3,6 +3,8 @@ import csv
 import datetime
 import json
 import os
+import shlex
+import sys
 from collections import Counter
 from multiprocessing import Process, Queue
 
@@ -265,13 +267,13 @@ def run_nn(X_train, y_train, X_test, y_test, layer_sizes, lr, batch_size, epoch_
 
 
 def main():
+    print(' '.join(shlex.quote(arg) for arg in sys.argv[1:]))
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('dataset', choices=('imdb', 'sstb_2', 'sstb_5'))
     arg_parser.add_argument('val_test', choices=('val', 'test'))
     arg_parser.add_argument('method', choices=('pvdm', 'dbow', 'nn'))
     arg_parser.add_argument('hyperparams')
     args = arg_parser.parse_args()
-    print(args.dataset, args.method, args.hyperparams)
     hyperparams = json.loads(args.hyperparams)
     train, val, test = \
         imdb.load_data('../data/imdb_sentiment') if args.dataset == 'imdb' else \
