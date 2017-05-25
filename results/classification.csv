@@ -1,7 +1,0 @@
-method,layer sizes,doc vecs,lr,epoch size,error rate
-logreg,,pvdm,0.01,30,0.19820
-logreg,,dbow,0.01,30,0.11916
-logreg,,dbow + pvdm,0.01,30,0.12092
-neural net,50,dbow + pvdm,0.01,30,0.12072
-neural net,25,dbow + pvdm,0.01,30,0.12056
-neural net,10,dbow + pvdm,0.01,30,0.12092

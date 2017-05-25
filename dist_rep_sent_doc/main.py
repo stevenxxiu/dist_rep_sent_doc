@@ -242,8 +242,12 @@ def run_nn(X_train, y_train, X_test, y_test, layer_sizes, lr, batch_size, epoch_
     X = tf.placeholder(tf.float32, [None, X_train.shape[1]])
     y = tf.placeholder(tf.int32, [None])
     dense = X
-    for layer_size in layer_sizes:
-        dense = tf.layers.dense(dense, layer_size, kernel_initializer=init_ops.glorot_uniform_initializer())
+    for i, layer_size in enumerate(layer_sizes):
+        dense = tf.layers.dense(
+            dense, layer_size,
+            activation=tf.nn.relu if i < len(layer_sizes) else None,
+            kernel_initializer=init_ops.glorot_uniform_initializer()
+        )
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=dense, labels=y))
     train_op = tf.train.AdamOptimizer(learning_rate=lr).minimize(loss)
     with tf.Session() as sess:
