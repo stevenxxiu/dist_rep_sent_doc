@@ -76,19 +76,27 @@ def rolling_window(a, window):
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 
-# noinspection PyTypeChecker
-def pvdm_sample(docs, word_to_index, word_to_freq, sample, window_size, epoch_size, q):
+def freq_word_subsample(docs, word_to_index, word_to_freq, sample, epoch_size, qs):
+    # remove infrequent words & sample frequent words
     probs = np.empty(len(word_to_freq))
     total_count = sum(word_to_freq.values())
     for word, count in word_to_freq.items():
         ratio = sample / (count / total_count) if count > 0 else 1
         probs[word_to_index[word]] = min(np.sqrt(ratio), 1)
     for i in range(epoch_size):
-        X_doc_, X_words_, y_ = [], [], []
+        indexes = []
         for j, doc in enumerate(docs):
-            # remove infrequent words & sample frequent words
             index = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
-            index = index[np.random.binomial(1, p=probs[index]).astype(np.bool)]
+            indexes.append(index[np.random.binomial(1, p=probs[index]).astype(np.bool)])
+        for q in qs:
+            q.put(indexes)
+
+
+# noinspection PyTypeChecker
+def pvdm_sample(indexes, word_to_index, window_size, epoch_size, q):
+    for i in range(epoch_size):
+        X_doc_, X_words_, y_ = [], [], []
+        for j, index in enumerate(indexes.get()):
             padded = np.pad(index, (window_size, 0), 'constant', constant_values=word_to_index['\0'])
             rolled = rolling_window(padded, window_size + 1)
             X_doc_.append(np.repeat(j, len(index)))
@@ -136,15 +144,14 @@ def run_pvdm(
             saver.restore(sess, os.path.join(train_path, 'model.ckpt'))
 
         # start sampling
-        q = Queue(1)
-        Process(target=pvdm_sample, args=(
-            docs, word_to_index, word_to_freq, sample, window_size, epoch_size, q
-        )).start()
+        q_pvdm, q = Queue(1), Queue(1)
+        Process(target=freq_word_subsample, args=(docs, word_to_index, word_to_freq, sample, epoch_size, [q])).start()
+        Process(target=pvdm_sample, args=(q, word_to_index, window_size, epoch_size, q_pvdm)).start()
 
         # train
         print(datetime.datetime.now(), 'started training')
         for i in range(epoch_size):
-            X_doc_, X_words_, y_ = q.get()
+            X_doc_, X_words_, y_ = q_pvdm.get()
             p = np.random.permutation(len(y_))
             total_loss = 0
             for j in range(0, len(y_), batch_size):
@@ -159,37 +166,49 @@ def run_pvdm(
 
 
 # noinspection PyTypeChecker
-def dbow_sample(docs, word_to_index, word_to_freq, sample, epoch_size, q):
-    probs = np.empty(len(word_to_freq))
-    total_count = sum(word_to_freq.values())
-    for word, count in word_to_freq.items():
-        ratio = sample / (count / total_count) if count > 0 else 1
-        probs[word_to_index[word]] = min(np.sqrt(ratio), 1)
+def dbow_sample(indexes, epoch_size, q):
     for i in range(epoch_size):
         X_doc_, y_ = [], []
-        for j, doc in enumerate(docs):
-            # remove infrequent words & sample frequent words
-            index = np.array([word_to_index[word] for word in doc[1] if word in word_to_index])
-            index = index[np.random.binomial(1, p=probs[index]).astype(np.bool)]
+        for j, index in enumerate(indexes.get()):
             X_doc_.append(np.repeat(j, len(index)))
             y_.append(index)
         q.put([np.concatenate(X_doc_), np.concatenate(y_)])
 
 
+# noinspection PyTypeChecker
+def sg_sample(indexes, window_size, epoch_size, q):
+    for i in range(epoch_size):
+        X_doc_, X_words_, y_ = [], [], []
+        for j, index in enumerate(indexes.get()):
+            padded = np.pad(index, window_size, 'constant', constant_values=-1)
+            rolled = rolling_window(padded, 2 * window_size + 1)
+            rolled = np.ravel(np.delete(rolled, window_size, axis=1))
+            mask = rolled != -1
+            y_.append(np.repeat(index, 2 * window_size)[mask])
+            X_words_.append(rolled[mask])
+        q.put([np.concatenate(X_words_), np.concatenate(y_)])
+
+
 def run_dbow(
-    docs, word_to_index, word_to_freq, tree, embedding_size, lr,
+    docs, word_to_index, word_to_freq, tree, sg, embedding_size, lr,
     sample, batch_size, epoch_size, save_path, train_path=None
 ):
     # network
     tf.reset_default_graph()
     X_doc = tf.placeholder(tf.int32, [None])
-    y = tf.placeholder(tf.int32, [None])
+    X_words = tf.placeholder(tf.int32, [None])
+    y_doc = tf.placeholder(tf.int32, [None])
+    y_words = tf.placeholder(tf.int32, [None])
     emb_doc = tf.Variable(tf.random_uniform(
         [len(docs), embedding_size], -0.5 / embedding_size, 0.5 / embedding_size
     ))
-    emb = tf.nn.embedding_lookup(emb_doc, X_doc)
+    emb_word = tf.Variable(tf.random_uniform(
+        [len(word_to_index), embedding_size], -0.5 / embedding_size, 0.5 / embedding_size
+    ))
+    emb_doc_lookup = tf.nn.embedding_lookup(emb_doc, X_doc)
+    emb_word_lookup = tf.nn.embedding_lookup(emb_word, X_words)
     l = HierarchicalSoftmaxLayer(tree)
-    loss = -l.apply([emb, y], training=True)
+    loss = -(l.apply([emb_doc_lookup, y_doc], training=True) + l.apply([emb_word_lookup, y_words], training=True))
     opt = LazyAdamOptimizer(lr)
     grads_and_vars = opt.compute_gradients(loss)
     if train_path:
@@ -207,24 +226,37 @@ def run_dbow(
             saver.restore(sess, os.path.join(train_path, 'model.ckpt'))
 
         # start sampling
-        q = Queue(1)
-        Process(target=dbow_sample, args=(docs, word_to_index, word_to_freq, sample, epoch_size, q)).start()
+        q_dbow, q_sg, qs = Queue(1), Queue(1), [Queue(1), Queue(1)] if sg else [Queue(1)]
+        Process(target=freq_word_subsample, args=(docs, word_to_index, word_to_freq, sample, epoch_size, qs)).start()
+        Process(target=dbow_sample, args=(qs[0], epoch_size, q_dbow)).start()
+        sg and Process(target=sg_sample, args=(qs[1], sg, epoch_size, q_sg)).start()
 
         # train
         print(datetime.datetime.now(), 'started training')
         for i in range(epoch_size):
-            X_doc_, y_ = q.get()
+            X_, y_ = q_dbow.get()
+            mask_ = np.ones(len(X_), dtype=np.bool)
+            if sg:
+                X_words_, y_words_ = q_sg.get()
+                X_ = np.concatenate([X_, X_words_])
+                y_ = np.concatenate([y_, y_words_])
+                mask_ = np.concatenate([mask_, np.zeros(len(y_words_), dtype=np.bool)])
             p = np.random.permutation(len(y_))
             total_loss = 0
             for j in range(0, len(y_), batch_size):
                 k = p[j:j + batch_size]
-                _, batch_loss = sess.run([train_op, loss], feed_dict={X_doc: X_doc_[k], y: y_[k]})
+                cur_X, cur_y = X_[k], y_[k]
+                doc_mask = mask_[k]
+                word_mask = np.logical_not(doc_mask)
+                _, batch_loss = sess.run([train_op, loss], feed_dict={
+                    X_doc: cur_X[doc_mask], y_doc: cur_y[doc_mask], X_words: cur_X[word_mask], y_words: cur_y[word_mask]
+                })
                 total_loss += batch_loss
             print(datetime.datetime.now(), f'finished epoch {i}, loss: {total_loss / len(y_):f}')
 
         # save
         os.makedirs(save_path, exist_ok=True)
-        save_model(save_path, docs, word_to_index, word_to_freq, emb_doc, None, l.W, sess)
+        save_model(save_path, docs, word_to_index, word_to_freq, emb_doc, emb_word if sg else None, l.W, sess)
 
 
 def load_nn_data(docs, paths):
