@@ -1,5 +1,4 @@
 #!/bin/bash
-# use pascal due to the possibility of exceeding gpu memory with some settings
 #PBS -q gpupascal
 #PBS -l ngpus=1
 #PBS -l ncpus=6
