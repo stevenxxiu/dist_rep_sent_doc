@@ -25,7 +25,7 @@ def main():
         'val_epoch_size': list(range(1, 50 + 1)),
     }
     for i in itertools.count(0):
-        name = f'results/dbow_{"sg_" if args.sg else ""}{args.dataset}_{i:03d}.txt'
+        name = f'results/dbow_{"sg_" if args.sg else ""}{args.dataset}_val/run_{i:03d}.txt'
         with suppress(FileExistsError), open(name, 'x'), open(name, 'a', encoding='utf-8') as out:
             p = {name: random.choice(values) for name, values in all_params.items()}
             train_path = f'__cache__/tf/{uuid.uuid4()}'
