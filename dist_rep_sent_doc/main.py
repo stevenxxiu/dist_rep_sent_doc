@@ -224,6 +224,7 @@ def run_dbow(
         if train_path:
             saver = tf.train.Saver({'hs_W': l.W})
             saver.restore(sess, os.path.join(train_path, 'model.ckpt'))
+            sg = False
 
         # start sampling
         q_dbow, q_sg, qs = Queue(1), Queue(1), [Queue(1), Queue(1)] if sg else [Queue(1)]
