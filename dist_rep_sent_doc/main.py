@@ -313,9 +313,9 @@ def main():
     args = arg_parser.parse_args()
     hyperparams = json.loads(args.hyperparams)
     train, val, test = \
-        imdb.load_data('../data/imdb_sentiment') if args.dataset == 'imdb' else \
-        sstb.load_data('../data/stanford_sentiment_treebank/class_2') if args.dataset == 'sstb_2' else \
-        sstb.load_data('../data/stanford_sentiment_treebank/class_5')
+        imdb.load_data('../../data/imdb_sentiment') if args.dataset == 'imdb' else \
+        sstb.load_data('../../data/stanford_sentiment_treebank/class_2') if args.dataset == 'sstb_2' else \
+        sstb.load_data('../../data/stanford_sentiment_treebank/class_5')
     val_test = {'val': val, 'test': test}[args.val_test]
     if args.dataset == 'imdb' and args.val_test == 'test':
         train.extend(val)
