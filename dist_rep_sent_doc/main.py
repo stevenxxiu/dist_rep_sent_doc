@@ -325,7 +325,7 @@ def main():
     elif args.method == 'dbow':
         tables = gen_tables((args.dataset, args.val_test), train, hyperparams.pop('min_freq'))
         run_dbow(train if 'train_path' not in hyperparams else val_test, *tables, **hyperparams)
-    else:
+    elif args.method == 'nn':
         run_nn(
             *load_nn_data(train, hyperparams.pop('train_paths')),
             *load_nn_data(val_test, hyperparams.pop('test_paths')),
