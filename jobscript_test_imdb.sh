@@ -2,6 +2,7 @@
 python='/cygdrive/c/Program Files/Python36/python.exe'
 export TF_CPP_MIN_LOG_LEVEL=3
 export PYTHONPATH=$(cygpath -d $PWD)
+export PYTHONUNBUFFERED=1
 
 "$python" dist_rep_sent_doc/main.py imdb test pvdm '{
     "mode": "mean", "window_size": 8, "embedding_size": 150,
